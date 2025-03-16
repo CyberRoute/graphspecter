@@ -1,3 +1,3 @@
-module github.com/yourusername/black_hat_gql
+module github.com/CyberRoute/graphspecter
 
 go 1.20

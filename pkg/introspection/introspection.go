@@ -1,10 +1,12 @@
 package introspection
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
-	"github.com/yourusername/black_hat_gql/pkg/network"
+	"github.com/CyberRoute/graphspecter/pkg/network"
+	"github.com/CyberRoute/graphspecter/pkg/logger"
 )
 
 // IntrospectionQuery contains the full introspection query.
@@ -99,8 +101,32 @@ fragment TypeRef on __Type {
 `
 
 // CheckIntrospection sends the introspection query to the target URL.
+// This is a backward compatibility wrapper for the context-aware version.
 func CheckIntrospection(url string, headers map[string]string) (map[string]interface{}, error) {
-	return network.SendGraphQLRequest(url, IntrospectionQuery, nil, headers)
+	ctx, cancel := context.WithTimeout(context.Background(), network.DefaultTimeout)
+	defer cancel()
+	return CheckIntrospectionWithContext(ctx, url, headers)
+}
+
+// CheckIntrospectionWithContext sends the introspection query to the target URL with context support.
+func CheckIntrospectionWithContext(ctx context.Context, url string, headers map[string]string) (map[string]interface{}, error) {
+	logger.Info("Checking introspection at %s", url)
+	result, err := network.SendGraphQLRequestWithContext(ctx, url, IntrospectionQuery, nil, headers)
+	if err != nil {
+		// Check for common errors and provide more user-friendly messages
+		if ctx.Err() == context.Canceled {
+			logger.Error("Introspection query was canceled")
+			return nil, fmt.Errorf("operation canceled - either by user interruption or another operation completed first")
+		} else if ctx.Err() == context.DeadlineExceeded {
+			logger.Error("Introspection query timed out")
+			return nil, fmt.Errorf("request timed out - try increasing timeout with the -timeout flag")
+		}
+		
+		logger.Error("Introspection query failed: %v", err)
+		return nil, err
+	}
+	logger.Debug("Received introspection response")
+	return result, nil
 }
 
 // IsIntrospectionEnabled checks if introspection is enabled based on the response.
