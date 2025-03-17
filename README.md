@@ -1,12 +1,11 @@
-<p align="center">
-  <img alt="GraphSpecter" src="img/graphspecter.png" style="width: 200px; height: 200px; border-radius: 50%;"/>
-  <p align="center">
-  </p>
-</p>
-
-# GraphSpecter
-
-A GraphQL security auditing tool written in Go.
+<table width="100%" align="center">
+  <tr>
+    <td align="center" bgcolor="#333340">
+      <img src="img/graphspecter.png" width="200" style="border-radius: 50%;">
+      <h1 style="color: white;">A GraphQL security auditing tool</h1>
+    </td>
+  </tr>
+</table>
 
 ## Features
 
