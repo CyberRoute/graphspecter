@@ -13,8 +13,8 @@ import (
 	"github.com/CyberRoute/graphspecter/pkg/fingerprint"
 	"github.com/CyberRoute/graphspecter/pkg/generator"
 	"github.com/CyberRoute/graphspecter/pkg/introspection"
-	"github.com/CyberRoute/graphspecter/pkg/network"
 	"github.com/CyberRoute/graphspecter/pkg/logger"
+	"github.com/CyberRoute/graphspecter/pkg/network"
 )
 
 func main() {
@@ -92,24 +92,23 @@ func main() {
 		targetURL := *baseURL + *endpoint
 		targetURLs = append(targetURLs, targetURL)
 		logger.Info("Using provided endpoint: %s", targetURL)
+
 	} else if *detect {
 		// Detection mode
 		logger.Info("Detection mode enabled. Scanning for GraphQL endpoints...")
-		
 		// Check all endpoints by default
 		detectedEndpoints, err := network.DetectAllGraphQLEndpointsWithContext(timeoutCtx, *baseURL, false)
 		if err != nil {
 			logger.Error("Detection failed: %v", err)
 			os.Exit(1)
 		}
-		
 		if len(detectedEndpoints) == 0 {
 			logger.Error("No GraphQL endpoints detected")
 			os.Exit(1)
 		}
-		
 		targetURLs = detectedEndpoints
 		logger.Info("Found %d GraphQL endpoints", len(targetURLs))
+
 	} else {
 		// Use the base URL directly if no endpoint/detection is provided
 		targetURLs = append(targetURLs, *baseURL)
@@ -130,74 +129,77 @@ func main() {
 	// Track if we found at least one endpoint with introspection enabled
 	introspectionEnabled := false
 	var lastIntrospectionResult map[string]interface{}
+
+	// If fingerprint flag is enabled, attempt to detect the GraphQL engine
+	if *fingerprintFlag {
+		logger.Info("Fingerprinting GraphQL engine on %s...", *baseURL)
+		engine, err := fingerprint.DetectEngineWithContext(timeoutCtx, *baseURL, headers)
+		if err != nil {
+			logger.Warn("Could not determine GraphQL engine for %s: %v", *baseURL, err)
+		} else {
+			logger.Info("Discovered GraphQL Engine on %s: %s", *baseURL, engine)
+		}
+	}
 	
 	// Check each target URL
-	for _, targetURL := range targetURLs {
-		logger.Info("Checking target: %s", targetURL)
-		
-		// If fingerprint flag is enabled, attempt to detect the GraphQL engine
-		if *fingerprintFlag {
-			logger.Info("Fingerprinting GraphQL engine on %s...", targetURL)
-			engine, err := fingerprint.DetectEngineWithContext(timeoutCtx, targetURL, headers)
+	if len(targetURLs) > 1 {
+		for _, targetURL := range targetURLs {
+			logger.Info("Checking target: %s", targetURL)
+			
+			// Check introspection
+			logger.Info("Checking if introspection is enabled on %s...", targetURL)
+			introspectionResult, err := introspection.CheckIntrospectionWithContext(timeoutCtx, targetURL, headers)
 			if err != nil {
-				logger.Warn("Could not determine GraphQL engine for %s: %v", targetURL, err)
-			} else {
-				logger.Info("Discovered GraphQL Engine on %s: %s", targetURL, engine)
-			}
-		}
-		
-		// Check introspection
-		logger.Info("Checking if introspection is enabled on %s...", targetURL)
-		introspectionResult, err := introspection.CheckIntrospectionWithContext(timeoutCtx, targetURL, headers)
-		if err != nil {
-			// Check if it's a formatting error (HTML or non-JSON response)
-			if strings.Contains(err.Error(), "HTML response") || 
-			   strings.Contains(err.Error(), "non-JSON response") {
-				logger.Warn("The endpoint %s doesn't appear to be a valid GraphQL endpoint: %v", targetURL, err)
-				logger.Info("This may be a false positive or the endpoint requires special headers/authentication")
+				// Check if it's a formatting error (HTML or non-JSON response)
+				if strings.Contains(err.Error(), "HTML response") || 
+				   strings.Contains(err.Error(), "non-JSON response") {
+					logger.Warn("The endpoint %s doesn't appear to be a valid GraphQL endpoint: %v", targetURL, err)
+					logger.Info("This may be a false positive or the endpoint requires special headers/authentication")
+					continue
+				}
+				
+				logger.Error("Error checking introspection on %s: %v", targetURL, err)
 				continue
 			}
+	
+			// Save the last valid introspection result for output
+			lastIntrospectionResult = introspectionResult
 			
-			logger.Error("Error checking introspection on %s: %v", targetURL, err)
-			continue
+			if introspection.IsIntrospectionEnabled(introspectionResult) {
+				logger.Warn("WARNING: Introspection is ENABLED on %s!", targetURL)
+				
+				// Write introspection result to file
+				outputName := *outputFile
+				if len(targetURLs) > 1 {
+					// For multiple endpoints, add endpoint to filename
+					parts := strings.Split(targetURL, "/")
+					endpointPart := "root"
+					if len(parts) > 3 {
+						endpointPart = strings.ReplaceAll(strings.Join(parts[3:], "_"), "/", "_")
+						if endpointPart == "" {
+							endpointPart = "root"
+						}
+					}
+					ext := ".json"
+					baseName := strings.TrimSuffix(*outputFile, ext)
+					outputName = fmt.Sprintf("%s_%s%s", baseName, endpointPart, ext)
+				}
+				
+				err = introspection.WriteIntrospectionToFile(introspectionResult, outputName)
+				if err != nil {
+					logger.Error("Error writing introspection result to file: %v", err)
+					continue
+				}
+				
+				logger.Info("Introspection data saved to %s", outputName)
+				introspectionEnabled = true
+				
+				// Don't stop here - continue checking other endpoints even if this one has introspection enabled
+			} else {
+				logger.Info("Introspection appears to be disabled on %s", targetURL)
+			}
 		}
 
-		// Save the last valid introspection result for output
-		lastIntrospectionResult = introspectionResult
-		
-		if introspection.IsIntrospectionEnabled(introspectionResult) {
-			logger.Warn("WARNING: Introspection is ENABLED on %s!", targetURL)
-			
-			// Write introspection result to file
-			outputName := *outputFile
-			if len(targetURLs) > 1 {
-				// For multiple endpoints, add endpoint to filename
-				parts := strings.Split(targetURL, "/")
-				endpointPart := "root"
-				if len(parts) > 3 {
-					endpointPart = strings.ReplaceAll(strings.Join(parts[3:], "_"), "/", "_")
-					if endpointPart == "" {
-						endpointPart = "root"
-					}
-				}
-				ext := ".json"
-				baseName := strings.TrimSuffix(*outputFile, ext)
-				outputName = fmt.Sprintf("%s_%s%s", baseName, endpointPart, ext)
-			}
-			
-			err = introspection.WriteIntrospectionToFile(introspectionResult, outputName)
-			if err != nil {
-				logger.Error("Error writing introspection result to file: %v", err)
-				continue
-			}
-			
-			logger.Info("Introspection data saved to %s", outputName)
-			introspectionEnabled = true
-			
-			// Don't stop here - continue checking other endpoints even if this one has introspection enabled
-		} else {
-			logger.Info("Introspection appears to be disabled on %s", targetURL)
-		}
 	}
 	
 	// Output summary

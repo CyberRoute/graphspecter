@@ -37,19 +37,24 @@ func DetectEngineWithContext(ctx context.Context, url string, headers map[string
 		if isApollo {
 			logger.Info("Detected Apollo GraphQL engine")
 			resultChan <- "Apollo"
-			cancel() // Cancel other detections
+			cancel() 
 		}
 	}()
 	
-	// Additional engine detection functions can be added here as goroutines
-	// For example:
-	// go func() { 
-	//     isHasura, _ := detectHasuraWithContext(ctx, url, headers)
-	//     if isHasura {
-	//         resultChan <- "Hasura"
-	//         cancel()
-	//     }
-	// }()
+	// Modify DetectEngineWithContext to include Graphene detection
+	go func() {
+		isGraphene, err := DetectGrapheneWithContext(ctx, url, headers)
+		if err != nil {
+			logger.Debug("Graphene detection error: %v", err)
+			return
+		}
+		if isGraphene {
+			logger.Info("Detected Graphene GraphQL engine")
+			resultChan <- "Graphene"
+			cancel() // Stop other detections
+		}
+	}()
+	
 	
 	// Wait for a result or context cancellation
 	select {
@@ -106,6 +111,44 @@ func DetectApolloWithContext(ctx context.Context, url string, headers map[string
 		}
 
 		if strings.Contains(message, expectedErrorSubstring) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// DetectGrapheneWithContext checks if the target GraphQL engine is Graphene by sending a specific query.
+// DetectGrapheneWithContext attempts to detect Graphene-Python by sending an invalid query.
+func DetectGrapheneWithContext(ctx context.Context, url string, headers map[string]string) (bool, error) {
+	logger.Debug("Testing for Graphene GraphQL engine at %s", url)
+
+	// Send an invalid query to trigger Graphene's unique error response
+	query := `aaa`
+	result, err := network.SendGraphQLRequestWithContext(ctx, url, query, nil, headers)
+	if err != nil {
+		return false, err
+	}
+
+	// Check for Graphene-specific syntax error
+	errors, ok := result["errors"].([]interface{})
+	if !ok {
+		return false, nil
+	}
+
+	for _, err := range errors {
+		errMap, ok := err.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		message, ok := errMap["message"].(string)
+		if !ok {
+			continue
+		}
+
+		// Check for the unique Graphene syntax error
+		if strings.Contains(message, "Syntax Error GraphQL (1:1)") {
 			return true, nil
 		}
 	}

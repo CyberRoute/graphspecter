@@ -163,6 +163,9 @@ func DetectAllGraphQLEndpointsWithContext(ctx context.Context, baseURL string, s
 	checkedEndpoints := 0
 	var mutex sync.Mutex
 	
+	// Normalize base URL to ensure it doesn't end with a slash
+	baseURL = strings.TrimRight(baseURL, "/")
+	
 	// Start concurrent checks for each potential endpoint
 	for _, path := range CommonPaths {
 		wg.Add(1)
