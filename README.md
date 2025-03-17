@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="GraphSpecter" src="img/graphspecter.png" style="width: 200px; height: auto; border-radius: 20px;"/>
+  <img alt="GraphSpecter" src="img/graphspecter.png" style="width: 200px; height: 200px; border-radius: 50%;"/>
   <p align="center">
   </p>
 </p>
