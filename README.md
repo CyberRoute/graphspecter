@@ -1,3 +1,9 @@
+<p align="center">
+  <img alt="GraphSpecter" src="https://raw.githubusercontent.com/CyberRoute/graphspecter/main/img/graphspecter.png"/>
+  <p align="center">
+  </p>
+</p>
+
 # GraphSpecter
 
 A GraphQL security auditing tool written in Go.
