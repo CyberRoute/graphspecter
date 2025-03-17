@@ -1,11 +1,8 @@
-<table width="100%" align="center">
-  <tr>
-    <td align="center" bgcolor="gray">
-      <img src="img/graphspecter.png" width="200" style="border-radius: 50%;">
-      <h1 style="color: white;">A GraphQL security auditing tool</h1>
-    </td>
-  </tr>
-</table>
+<p align="center">
+   <img alt="GraphSpecter" src="img/graphspecter.png" width="200" height="200"/>
+   <p align="center">
+   </p>
+ </p>
 
 ## Features
 
