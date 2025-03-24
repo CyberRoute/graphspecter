@@ -13,6 +13,7 @@ import (
 	"github.com/CyberRoute/graphspecter/pkg/introspection"
 	"github.com/CyberRoute/graphspecter/pkg/logger"
 	"github.com/CyberRoute/graphspecter/pkg/network"
+	"github.com/CyberRoute/graphspecter/pkg/schema"
 )
 
 func main() {
@@ -36,6 +37,14 @@ func main() {
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 	logFile := flag.String("log-file", "", "Log to file in addition to stdout")
 	noColor := flag.Bool("no-color", false, "Disable colored output")
+	
+	// Schema parsing options
+	schemaFile := flag.String("f", "", "File with the GraphQL schema (introspection JSON)")
+	listOption := flag.String("l", "", "Parse GraphQL schema and list queries, mutations or both (valid values: 'queries', 'mutations' or 'all')")
+	queryOption := flag.String("q", "", "Only print named queries (comma-separated list of query names)")
+	mutationOption := flag.String("m", "", "Only print named mutations (comma-separated list of mutation names)")
+	allQueriesFlag := flag.Bool("Q", false, "Only print queries (by default both queries and mutations are printed)")
+	allMutationsFlag := flag.Bool("M", false, "Only print mutations (by default both queries and mutations are printed)")
 
 	flag.Parse()
 	
@@ -46,15 +55,22 @@ func main() {
 	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, *timeout)
 	defer timeoutCancel()
 	
-	if *baseURL == "" {
-		flag.Usage()
-		os.Exit(0)
-	}
-
 	// Log startup information
 	displayLogo()
 	logger.Info("GraphSpecter v1.0.0 starting...")
 	logger.Debug("Timeout set to %s", *timeout)
+	
+	// Handle schema parsing if the file option is provided
+	if *schemaFile != "" {
+		handleSchemaFile(*schemaFile, *listOption, *queryOption, *mutationOption, *allQueriesFlag, *allMutationsFlag)
+		os.Exit(0)
+	}
+	
+	// For other operations, a base URL is required
+	if *baseURL == "" {
+		flag.Usage()
+		os.Exit(0)
+	}
 
 	// Set up context for network operations
 	var targetURLs []string
@@ -245,4 +261,95 @@ func setupLogging(level string, logFilePath string, useColors bool) {
 	
 	// Configure color output
 	logger.EnableColors(useColors)
+}
+
+// handleSchemaFile processes an introspection JSON file and handles the schema-related operations
+func handleSchemaFile(filePath, listOption, queryOption, mutationOption string, allQueries, allMutations bool) {
+	// Load the schema from file
+	schemaObj, err := schema.LoadFromFile(filePath)
+	if err != nil {
+		logger.Error("Failed to load schema: %v", err)
+		os.Exit(1)
+	}
+	
+	// Handle the list option to print available queries and mutations
+	if listOption != "" {
+		printAvailableOperations(schemaObj, listOption)
+		return
+	}
+	
+	// If explicit queries (-q) or mutations (-m) provided, they take priority
+	if queryOption != "" || mutationOption != "" {
+		allQueries = false
+		allMutations = false
+	} else if !allQueries && !allMutations {
+		// Otherwise print all queries and mutations, unless one of the -Q / -M flags is specified
+		allQueries = true
+		allMutations = true
+	}
+	
+	// Print queries
+	if allQueries || queryOption != "" {
+		if allQueries {
+			// Print all queries
+			for _, queryName := range schemaObj.ListQueries() {
+				query, err := schemaObj.GenerateQuery(queryName)
+				if err != nil {
+					logger.Error("Failed to generate query for %s: %v", queryName, err)
+					continue
+				}
+				fmt.Println(query)
+			}
+		} else {
+			// Print specific queries
+			for _, queryName := range strings.Split(queryOption, ",") {
+				query, err := schemaObj.GenerateQuery(queryName)
+				if err != nil {
+					logger.Error("Failed to generate query for %s: %v", queryName, err)
+					continue
+				}
+				fmt.Println(query)
+			}
+		}
+	}
+	
+	// Print mutations
+	if (allMutations || mutationOption != "") && schemaObj.Mutation != nil {
+		if allMutations {
+			// Print all mutations
+			for _, mutationName := range schemaObj.ListMutations() {
+				mutation, err := schemaObj.GenerateMutation(mutationName)
+				if err != nil {
+					logger.Error("Failed to generate mutation for %s: %v", mutationName, err)
+					continue
+				}
+				fmt.Println(mutation)
+			}
+		} else {
+			// Print specific mutations
+			for _, mutationName := range strings.Split(mutationOption, ",") {
+				mutation, err := schemaObj.GenerateMutation(mutationName)
+				if err != nil {
+					logger.Error("Failed to generate mutation for %s: %v", mutationName, err)
+					continue
+				}
+				fmt.Println(mutation)
+			}
+		}
+	}
+}
+
+// printAvailableOperations prints the names of queries and/or mutations in the schema
+func printAvailableOperations(schemaObj *schema.GQLSchema, listOption string) {
+	if listOption == "queries" || listOption == "all" {
+		for _, queryName := range schemaObj.ListQueries() {
+			fmt.Printf("query %s\n", queryName)
+		}
+	}
+	
+	if (listOption == "mutations" || listOption == "all") && schemaObj.Mutation != nil {
+		for _, mutationName := range schemaObj.ListMutations() {
+			fmt.Printf("mutation %s\n", mutationName)
+		}
+	}
 }
