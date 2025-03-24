@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -11,7 +10,6 @@ import (
 	"time"
 
 	"github.com/CyberRoute/graphspecter/pkg/fingerprint"
-	"github.com/CyberRoute/graphspecter/pkg/generator"
 	"github.com/CyberRoute/graphspecter/pkg/introspection"
 	"github.com/CyberRoute/graphspecter/pkg/logger"
 	"github.com/CyberRoute/graphspecter/pkg/network"
@@ -27,19 +25,14 @@ func main() {
 	
 	// Flags:
 	// -base: Base URL (e.g. "http://192.168.1.1:5013")
-	// -endpoint: Specific GraphQL endpoint (e.g. "/graphql")
 	// -detect: Enable detection mode (scan common endpoints)
 	// -fingerprint: Enable GraphQL engine fingerprinting
 	// -output: File to save introspection results
 	baseURL := flag.String("base", "", "Base URL of the target (e.g. http://192.168.1.1:5013)")
-	endpoint := flag.String("endpoint", "", "Specific GraphQL endpoint (if not provided, detection will be attempted)")
 	detect := flag.Bool("detect", false, "Enable detection mode to find a GraphQL endpoint")
 	fingerprintFlag := flag.Bool("fingerprint", false, "Enable GraphQL engine fingerprinting")
 	outputFile := flag.String("output", "introspection.json", "Output file for introspection results")
-	generateQueriesFlag := flag.Bool("generateQueries", false, "Generate query templates for all enum-based arguments using introspection data")
-	introspectionPath := flag.String("introspection", "introspection.json", "Path to the introspection JSON file")
-	queryOutputPath := flag.String("queryOutput", "generated_queries.json", "Output file for generated queries")
-	timeout := flag.Duration("timeout", 60*time.Second, "Timeout for operations (e.g., 30s, 1m)")
+	timeout := flag.Duration("timeout",1*time.Second, "Timeout for operations (e.g., 30s, 1m)")
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 	logFile := flag.String("log-file", "", "Log to file in addition to stdout")
 	noColor := flag.Bool("no-color", false, "Disable colored output")
@@ -53,47 +46,20 @@ func main() {
 	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, *timeout)
 	defer timeoutCancel()
 	
-	// Log startup information
-	logger.Info("GraphSpecter v1.0.0 starting...")
-	logger.Debug("Timeout set to %s", *timeout)
-
-	if *generateQueriesFlag {
-		logger.Info("Generating queries from introspection data")
-		schema, err := generator.LoadIntrospection(*introspectionPath)
-		if err != nil {
-			logger.Error("Error loading introspection: %v", err)
-			os.Exit(1)
-		}
-		queries := generator.GenerateQueries(schema)
-		outputJSON, err := json.MarshalIndent(queries, "", "  ")
-		if err != nil {
-			logger.Error("Error marshalling generated queries: %v", err)
-			os.Exit(1)
-		}
-		if err := os.WriteFile(*queryOutputPath, outputJSON, 0644); err != nil {
-			logger.Error("Error writing output file: %v", err)
-			os.Exit(1)
-		}
-		logger.Info("Generated queries have been written to %s", *queryOutputPath)
+	if *baseURL == "" {
+		flag.Usage()
 		os.Exit(0)
 	}
-	
-	if *baseURL == "" {
-		logger.Error("Error: Base URL is required")
-		flag.Usage()
-		os.Exit(1)
-	}
+
+	// Log startup information
+	displayLogo()
+	logger.Info("GraphSpecter v1.0.0 starting...")
+	logger.Debug("Timeout set to %s", *timeout)
 
 	// Set up context for network operations
 	var targetURLs []string
 	
-	if *endpoint != "" {
-		// Use the explicitly provided endpoint
-		targetURL := *baseURL + *endpoint
-		targetURLs = append(targetURLs, targetURL)
-		logger.Info("Using provided endpoint: %s", targetURL)
-
-	} else if *detect {
+	if *detect {
 		// Detection mode
 		logger.Info("Detection mode enabled. Scanning for GraphQL endpoints...")
 		// Check all endpoints by default
@@ -132,12 +98,26 @@ func main() {
 
 	// If fingerprint flag is enabled, attempt to detect the GraphQL engine
 	if *fingerprintFlag {
-		logger.Info("Fingerprinting GraphQL engine on %s...", *baseURL)
-		engine, err := fingerprint.DetectEngineWithContext(timeoutCtx, *baseURL, headers)
-		if err != nil {
-			logger.Warn("Could not determine GraphQL engine for %s: %v", *baseURL, err)
+		// If detection mode is enabled, fingerprint each endpoint
+		if *detect {
+			for _, targetURL := range targetURLs {
+				logger.Info("Fingerprinting GraphQL engine on %s...", targetURL)
+				engine, err := fingerprint.DetectEngineWithContext(timeoutCtx, targetURL, headers)
+				if err != nil {
+					logger.Warn("Could not determine GraphQL engine for %s: %v", targetURL, err)
+				} else {
+					logger.Info("Discovered GraphQL Engine on %s: %s", targetURL, engine)
+				}
+			}
 		} else {
-			logger.Info("Discovered GraphQL Engine on %s: %s", *baseURL, engine)
+			// Just fingerprint the base URL
+			logger.Info("Fingerprinting GraphQL engine on %s...", *baseURL)
+			engine, err := fingerprint.DetectEngineWithContext(timeoutCtx, *baseURL, headers)
+			if err != nil {
+				logger.Warn("Could not determine GraphQL engine for %s: %v", *baseURL, err)
+			} else {
+				logger.Info("Discovered GraphQL Engine on %s: %s", *baseURL, engine)
+			}
 		}
 	}
 	
@@ -207,10 +187,7 @@ func main() {
 		logger.Warn("WARNING: Introspection is ENABLED on at least one endpoint!")
 	} else if lastIntrospectionResult != nil {
 		logger.Info("Introspection appears to be disabled on all checked endpoints")
-	} else {
-		logger.Info("No valid GraphQL endpoints with introspection capabilities found")
 	}
-
 	logger.Info("Audit completed")
 }
 
@@ -227,6 +204,18 @@ func setupSignalHandler(cancel context.CancelFunc) {
 		time.Sleep(500 * time.Millisecond)
 		os.Exit(0)
 	}()
+}
+
+func displayLogo() {
+	logo := `
+   ____                 _    ____                  _            
+  / ___|_ __ __ _ _ __ | |__/ ___| _ __   ___  ___| |_ ___ _ __ 
+ | |  _| '__/ _` + "`" + ` | '_ \| '_ \___ \| '_ \ / _ \/ __| __/ _ \ '__|
+ | |_| | | | (_| | |_) | | | |__) | |_) |  __/ (__| ||  __/ |   
+  \____|_|  \__,_| .__/|_| |_|____/| .__/ \___|\___|\__\___|_|   
+                 |_|               |_|                           
+`
+	fmt.Println(logo)
 }
 
 // setupLogging configures the logger based on command line flags
