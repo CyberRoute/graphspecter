@@ -1,0 +1,197 @@
+// pkg/cli.go
+package cli
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/signal"
+	"strings"
+	"time"
+
+	"github.com/CyberRoute/graphspecter/pkg/introspection"
+	"github.com/CyberRoute/graphspecter/pkg/logger"
+	"github.com/CyberRoute/graphspecter/pkg/schema"
+)
+
+func DisplayLogo() {
+	logo := `
+   ____                 _    ____                  _            
+  / ___|_ __ __ _ _ __ | |__/ ___| _ __   ___  ___| |_ ___ _ __ 
+ | |  _| '__/ _` + "`" + ` | '_ \| '_ \___ \| '_ \ / _ \/ __| __/ _ \ '__|
+ | |_| | | | (_| | |_) | | | |__) | |_) |  __/ (__| ||  __/ |   
+  \____|_|  \__,_| .__/|_| |_|____/| .__/ \___|\___|\__\___|_|   
+                 |_|               |_|                           
+`
+	fmt.Println(logo)
+}
+
+// SetupSignalHandler creates a cancellable context and registers a signal handler for graceful shutdown.
+// It returns the new context and its cancel function.
+func SetupSignalHandler(parent context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(parent)
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+
+	go func() {
+		<-c
+		logger.Info("Received interrupt signal, shutting down...")
+		cancel()
+		// Give operations a chance to clean up
+		time.Sleep(500 * time.Millisecond)
+		os.Exit(0)
+	}()
+
+	return ctx, cancel
+}
+
+// HandleSchemaFile processes an introspection JSON file and handles schema-related operations.
+func HandleSchemaFile(filePath, listOption, queryOption, mutationOption string, allQueries, allMutations bool) {
+	// Load the schema from file
+	schemaObj, err := schema.LoadFromFile(filePath)
+	if err != nil {
+		logger.Error("Failed to load schema: %v", err)
+		os.Exit(1)
+	}
+
+	// Handle the list option to print available queries and mutations
+	if listOption != "" {
+		PrintAvailableOperations(schemaObj, listOption)
+		return
+	}
+
+	// If explicit queries (-q) or mutations (-m) provided, they take priority
+	if queryOption != "" || mutationOption != "" {
+		allQueries = false
+		allMutations = false
+	} else if !allQueries && !allMutations {
+		// Otherwise print all queries and mutations, unless one of the -Q / -M flags is specified
+		allQueries = true
+		allMutations = true
+	}
+
+	// Print queries
+	if allQueries || queryOption != "" {
+		if allQueries {
+			// Print all queries
+			for _, queryName := range schemaObj.ListQueries() {
+				query, err := schemaObj.GenerateQuery(queryName)
+				if err != nil {
+					logger.Error("Failed to generate query for %s: %v", queryName, err)
+					continue
+				}
+				fmt.Println(query)
+			}
+		} else {
+			// Print specific queries
+			for _, queryName := range strings.Split(queryOption, ",") {
+				query, err := schemaObj.GenerateQuery(queryName)
+				if err != nil {
+					logger.Error("Failed to generate query for %s: %v", queryName, err)
+					continue
+				}
+				fmt.Println(query)
+			}
+		}
+	}
+
+	// Print mutations
+	if (allMutations || mutationOption != "") && schemaObj.Mutation != nil {
+		if allMutations {
+			// Print all mutations
+			for _, mutationName := range schemaObj.ListMutations() {
+				mutation, err := schemaObj.GenerateMutation(mutationName)
+				if err != nil {
+					logger.Error("Failed to generate mutation for %s: %v", mutationName, err)
+					continue
+				}
+				fmt.Println(mutation)
+			}
+		} else {
+			// Print specific mutations
+			for _, mutationName := range strings.Split(mutationOption, ",") {
+				mutation, err := schemaObj.GenerateMutation(mutationName)
+				if err != nil {
+					logger.Error("Failed to generate mutation for %s: %v", mutationName, err)
+					continue
+				}
+				fmt.Println(mutation)
+			}
+		}
+	}
+}
+
+// PrintAvailableOperations prints the names of queries and/or mutations in the schema.
+func PrintAvailableOperations(schemaObj *schema.GQLSchema, listOption string) {
+	if listOption == "queries" || listOption == "all" {
+		for _, queryName := range schemaObj.ListQueries() {
+			fmt.Printf("query %s\n", queryName)
+		}
+	}
+
+	if (listOption == "mutations" || listOption == "all") && schemaObj.Mutation != nil {
+		for _, mutationName := range schemaObj.ListMutations() {
+			fmt.Printf("mutation %s\n", mutationName)
+		}
+	}
+}
+
+// AuditEndpoints checks each target URL for introspection and writes the results to file.
+func AuditEndpoints(timeoutCtx context.Context, targetURLs []string, headers map[string]string, outputFile string) {
+	// Track if we found at least one endpoint with introspection enabled.
+	introspectionEnabled := false
+	var lastIntrospectionResult map[string]interface{}
+
+	// Loop through each target URL.
+	for _, targetURL := range targetURLs {
+		logger.Info("Checking target: %s", targetURL)
+		logger.Info("Checking if introspection is enabled on %s...", targetURL)
+		introspectionResult, err := introspection.CheckIntrospectionWithContext(timeoutCtx, targetURL, headers)
+		if err != nil {
+			if strings.Contains(err.Error(), "HTML response") || strings.Contains(err.Error(), "non-JSON response") {
+				logger.Warn("The endpoint %s doesn't appear to be a valid GraphQL endpoint: %v", targetURL, err)
+				logger.Info("This may be a false positive or the endpoint requires special headers/authentication")
+				continue
+			}
+			logger.Error("Error checking introspection on %s: %v", targetURL, err)
+			continue
+		}
+
+		lastIntrospectionResult = introspectionResult
+
+		if introspection.IsIntrospectionEnabled(introspectionResult) {
+			logger.Warn("WARNING: Introspection is ENABLED on %s!", targetURL)
+			outName := outputFile
+			if len(targetURLs) > 1 {
+				parts := strings.Split(targetURL, "/")
+				endpointPart := "root"
+				if len(parts) > 3 {
+					endpointPart = strings.ReplaceAll(strings.Join(parts[3:], "_"), "/", "_")
+					if endpointPart == "" {
+						endpointPart = "root"
+					}
+				}
+				ext := ".json"
+				baseName := strings.TrimSuffix(outputFile, ext)
+				outName = fmt.Sprintf("%s_%s%s", baseName, endpointPart, ext)
+			}
+			err = introspection.WriteIntrospectionToFile(introspectionResult, outName)
+			if err != nil {
+				logger.Error("Error writing introspection result to file: %v", err)
+				continue
+			}
+			logger.Info("Introspection data saved to %s", outName)
+			introspectionEnabled = true
+		} else {
+			logger.Info("Introspection appears to be disabled on %s", targetURL)
+		}
+	}
+
+	// Output summary.
+	if introspectionEnabled {
+		logger.Warn("WARNING: Introspection is ENABLED on at least one endpoint!")
+	} else if lastIntrospectionResult != nil {
+		logger.Info("Introspection appears to be disabled on all checked endpoints")
+	}
+	logger.Info("Audit completed")
+}

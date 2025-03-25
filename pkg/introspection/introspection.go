@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"github.com/CyberRoute/graphspecter/pkg/network"
 	"github.com/CyberRoute/graphspecter/pkg/logger"
+	"github.com/CyberRoute/graphspecter/pkg/network"
+	"os"
 )
 
 // IntrospectionQuery contains the full introspection query.
@@ -121,7 +121,7 @@ func CheckIntrospectionWithContext(ctx context.Context, url string, headers map[
 			logger.Error("Introspection query timed out")
 			return nil, fmt.Errorf("request timed out - try increasing timeout with the -timeout flag")
 		}
-		
+
 		logger.Error("Introspection query failed: %v", err)
 		return nil, err
 	}

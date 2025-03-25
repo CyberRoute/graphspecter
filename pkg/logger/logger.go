@@ -65,6 +65,34 @@ func SetOutput(w io.Writer) {
 	output = w
 }
 
+// SetupLogging configures the logger based on command line flags.
+func SetupLogging(level string, logFilePath string, useColors bool) {
+	// Set log level based on string value.
+	switch level {
+	case "debug":
+		SetLevel(LevelDebug)
+	case "info":
+		SetLevel(LevelInfo)
+	case "warn":
+		SetLevel(LevelWarn)
+	case "error":
+		SetLevel(LevelError)
+	default:
+		SetLevel(LevelInfo)
+	}
+
+	// Set up log file if specified.
+	if logFilePath != "" {
+		if err := SetLogFile(logFilePath); err != nil {
+			fmt.Printf("Error setting up log file: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	// Enable or disable color output.
+	EnableColors(useColors)
+}
+
 // SetLogFile sets up logging to a file in addition to stdout
 func SetLogFile(filename string) error {
 	if logFile != nil {
@@ -103,14 +131,14 @@ func log(level LogLevel, format string, args ...interface{}) {
 
 	// Get the current time
 	now := time.Now().Format("2006-01-02 15:04:05.000")
-	
+
 	// Format the message
 	msg := fmt.Sprintf(format, args...)
-	
+
 	// Build the log entry
 	levelStr := logLevelStrings[level]
 	var logEntry string
-	
+
 	if useColors && output == os.Stdout {
 		// Add color if we're logging to terminal
 		color := logLevelColors[level]
@@ -119,10 +147,10 @@ func log(level LogLevel, format string, args ...interface{}) {
 		// No color for file output
 		logEntry = fmt.Sprintf("%s [%s] %s\n", now, levelStr, msg)
 	}
-	
+
 	// Write to output
 	fmt.Fprint(output, logEntry)
-	
+
 	// If this is a fatal log, exit the program
 	if level == LevelFatal {
 		if logFile != nil {

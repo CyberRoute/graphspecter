@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/CyberRoute/graphspecter/pkg/types"
 	"github.com/CyberRoute/graphspecter/pkg/logger"
+	"github.com/CyberRoute/graphspecter/pkg/types"
 )
 
 // CommonPaths contains a list of potential GraphQL endpoints.
@@ -79,7 +79,7 @@ func SendGraphQLRequestWithContext(ctx context.Context, url string, query string
 	client := &http.Client{
 		Timeout: DefaultTimeout,
 	}
-	
+
 	logger.Debug("Sending GraphQL request to %s", url)
 	resp, err := client.Do(req)
 	if err != nil {
@@ -138,11 +138,11 @@ func DetectGraphQLEndpointWithContext(ctx context.Context, baseURL string) (stri
 	if err != nil {
 		return "", err
 	}
-	
+
 	if len(results) > 0 {
 		return results[0], nil
 	}
-	
+
 	return "", fmt.Errorf("GraphQL endpoint not detected on any common paths")
 }
 
@@ -150,28 +150,28 @@ func DetectGraphQLEndpointWithContext(ctx context.Context, baseURL string) (stri
 // If stopOnFirst is true, it will stop after finding the first valid endpoint
 func DetectAllGraphQLEndpointsWithContext(ctx context.Context, baseURL string, stopOnFirst bool) ([]string, error) {
 	logger.Info("Starting endpoint detection for %s", baseURL)
-	
+
 	// Use concurrency for faster scanning
 	var wg sync.WaitGroup
 	resultChan := make(chan string, len(CommonPaths))
-	
+
 	// Create a cancellable context
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	
+
 	// Count of endpoints checked
 	checkedEndpoints := 0
 	var mutex sync.Mutex
-	
+
 	// Normalize base URL to ensure it doesn't end with a slash
 	baseURL = strings.TrimRight(baseURL, "/")
-	
+
 	// Start concurrent checks for each potential endpoint
 	for _, path := range CommonPaths {
 		wg.Add(1)
 		go func(p string) {
 			defer wg.Done()
-			
+
 			select {
 			case <-ctx.Done():
 				return // Context was cancelled (timeout or stopOnFirst)
@@ -179,20 +179,20 @@ func DetectAllGraphQLEndpointsWithContext(ctx context.Context, baseURL string, s
 				endpoint := baseURL + p
 				logger.Debug("Checking endpoint: %s", endpoint)
 				isValid, err := IsGraphQLEndpointWithContext(ctx, endpoint)
-				
+
 				mutex.Lock()
 				checkedEndpoints++
 				mutex.Unlock()
-				
+
 				if err != nil {
 					logger.Debug("Error checking %s: %v", endpoint, err)
 					return
 				}
-				
+
 				if isValid {
 					logger.Info("Found GraphQL endpoint at: %s", endpoint)
 					resultChan <- endpoint
-					
+
 					// If stopOnFirst is true, cancel other goroutines
 					if stopOnFirst {
 						cancel()
@@ -201,16 +201,16 @@ func DetectAllGraphQLEndpointsWithContext(ctx context.Context, baseURL string, s
 			}
 		}(path)
 	}
-	
+
 	// Wait for all goroutines to complete
 	go func() {
 		wg.Wait()
 		close(resultChan)
 	}()
-	
+
 	// Collect all results
 	var results []string
-	
+
 	// Keep collecting until channel is closed or context is cancelled
 	for {
 		select {
@@ -231,12 +231,12 @@ func DetectAllGraphQLEndpointsWithContext(ctx context.Context, baseURL string, s
 			goto DONE
 		}
 	}
-	
+
 DONE:
 	if checkedEndpoints == 0 {
 		return nil, fmt.Errorf("unable to check any GraphQL endpoints, possible network or server issue")
 	}
-	
+
 	return results, nil
 }
 
@@ -259,24 +259,24 @@ func GetFriendlyErrorMessage(err error) string {
 	if err == nil {
 		return ""
 	}
-	
+
 	errMsg := err.Error()
-	
+
 	// Handle context cancellation errors
 	if strings.Contains(errMsg, "context canceled") {
 		return "Request was canceled - either by user interruption or another endpoint was found"
 	}
-	
+
 	// Handle timeout errors
 	if strings.Contains(errMsg, "context deadline exceeded") || strings.Contains(errMsg, "timeout") {
 		return "Request timed out - consider increasing timeout with -timeout flag"
 	}
-	
+
 	// Handle connection errors
 	if strings.Contains(errMsg, "connection refused") {
 		return "Connection refused - server may be down or not accepting connections"
 	}
-	
+
 	// Return original error message if no friendly version is available
 	return errMsg
 }
@@ -288,14 +288,14 @@ func IsGraphQLEndpointWithContext(ctx context.Context, url string) (bool, error)
 	if err != nil {
 		// If we got HTML or non-JSON response, treat this as "not a GraphQL endpoint"
 		// rather than a hard error
-		if strings.Contains(err.Error(), "HTML response") || 
-		   strings.Contains(err.Error(), "non-JSON response") {
+		if strings.Contains(err.Error(), "HTML response") ||
+			strings.Contains(err.Error(), "non-JSON response") {
 			logger.Debug("Endpoint %s is not a GraphQL endpoint: %v", url, err)
 			return false, nil
 		}
 		// Context cancellation and timeouts are normal during parallel endpoint detection
-		if strings.Contains(err.Error(), "canceled") || 
-		   strings.Contains(err.Error(), "timed out") {
+		if strings.Contains(err.Error(), "canceled") ||
+			strings.Contains(err.Error(), "timed out") {
 			logger.Debug("Check for endpoint %s was interrupted: %v", url, err)
 			return false, nil
 		}
