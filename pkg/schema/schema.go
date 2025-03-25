@@ -150,7 +150,29 @@ func LoadFromFile(filePath string) (*GQLSchema, error) {
 	return schema, nil
 }
 
-// GenerateQuery generates a GraphQL query for a specified field
+// Helper function to recursively unwrap NON_NULL and LIST wrappers
+func unwrapType(tr *TypeRef) *TypeRef {
+	for tr.Kind == NON_NULL || tr.Kind == LIST {
+		tr = tr.OfType
+	}
+	return tr
+}
+
+func (tr *TypeRef) String() string {
+	if tr == nil {
+		return ""
+	}
+	switch tr.Kind {
+	case NON_NULL:
+		return tr.OfType.String() + "!"
+	case LIST:
+		return "[" + tr.OfType.String() + "]"
+	default:
+		return tr.Name
+	}
+}
+
+// Modified GenerateQuery function to include a selection set based on the type’s fields
 func (s *GQLSchema) GenerateQuery(fieldName string) (string, error) {
 	if s.Query == nil {
 		return "", fmt.Errorf("schema has no query type")
@@ -164,12 +186,11 @@ func (s *GQLSchema) GenerateQuery(fieldName string) (string, error) {
 			break
 		}
 	}
-
 	if queryField == nil {
 		return "", fmt.Errorf("field '%s' not found in query type", fieldName)
 	}
 
-	// Basic query generation
+	// Begin building the query
 	query := fmt.Sprintf("query %s {\n  %s", fieldName, fieldName)
 
 	// Add arguments if any
@@ -179,24 +200,36 @@ func (s *GQLSchema) GenerateQuery(fieldName string) (string, error) {
 			if i > 0 {
 				query += ", "
 			}
-			query += fmt.Sprintf("%s: $%s", arg.Name, arg.Name)
+			query += fmt.Sprintf("%s: %s", arg.Name, arg.Type.String())
 		}
 		query += ")"
 	}
 
-	// Add selection set (just a placeholder for now)
-	query += " {\n    # Selection set would go here\n  }\n}"
+	// Determine the underlying type of the query field
+	underlying := unwrapType(&queryField.Type)
+	if typeDef, ok := s.Types[underlying.Name]; ok && len(typeDef.Fields) > 0 {
+		// Build the selection set by listing each field name
+		selectionSet := ""
+		for _, f := range typeDef.Fields {
+			// You might want to filter out fields you don't want to auto-select (e.g. nested objects)
+			selectionSet += fmt.Sprintf("\n    %s", f.Name)
+		}
+		query += " {" + selectionSet + "\n  }\n}"
+	} else {
+		// Fallback if the type definition is not found or has no fields
+		query += " {\n    # Selection set would go here\n  }\n}"
+	}
 
 	return query, nil
 }
 
-// GenerateMutation generates a GraphQL mutation for a specified field
+// Modified GenerateMutation function to include a selection set based on the mutation’s return type fields
 func (s *GQLSchema) GenerateMutation(fieldName string) (string, error) {
 	if s.Mutation == nil {
 		return "", fmt.Errorf("schema has no mutation type")
 	}
 
-	// Find the specified field
+	// Find the specified mutation field
 	var mutationField *Field
 	for _, field := range s.Mutation.Fields {
 		if field.Name == fieldName {
@@ -219,13 +252,24 @@ func (s *GQLSchema) GenerateMutation(fieldName string) (string, error) {
 			if i > 0 {
 				mutation += ", "
 			}
-			mutation += fmt.Sprintf("%s: $%s", arg.Name, arg.Name)
+			mutation += fmt.Sprintf("%s: $%s", arg.Name, arg.Type.String())
 		}
 		mutation += ")"
 	}
 
-	// Add selection set (just a placeholder for now)
-	mutation += " {\n    # Selection set would go here\n  }\n}"
+	// Determine the underlying type of the mutation field and generate a selection set
+	underlying := unwrapType(&mutationField.Type)
+	if typeDef, ok := s.Types[underlying.Name]; ok && len(typeDef.Fields) > 0 {
+		// Build the selection set by listing each field name
+		selectionSet := ""
+		for _, f := range typeDef.Fields {
+			selectionSet += fmt.Sprintf("\n    %s", f.Name)
+		}
+		mutation += " {" + selectionSet + "\n  }\n}"
+	} else {
+		// Fallback if the type definition is not found or has no fields
+		mutation += " {\n    # Selection set would go here\n  }\n}"
+	}
 
 	return mutation, nil
 }
