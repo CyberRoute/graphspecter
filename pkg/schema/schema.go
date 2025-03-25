@@ -252,7 +252,7 @@ func (s *GQLSchema) GenerateMutation(fieldName string) (string, error) {
 			if i > 0 {
 				mutation += ", "
 			}
-			mutation += fmt.Sprintf("%s: $%s", arg.Name, arg.Type.String())
+			mutation += fmt.Sprintf("%s: %s", arg.Name, arg.Type.String())
 		}
 		mutation += ")"
 	}
