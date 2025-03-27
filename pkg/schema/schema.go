@@ -247,7 +247,8 @@ func (s *GQLSchema) GenerateQuery(fieldName string) (string, error) {
 	if selectionSet != "" {
 		query += " {" + selectionSet + "\n  }\n}"
 	} else {
-		query += " {\n    # Selection set would go here\n  }\n}"
+		// No selection set is needed, simply close the query.
+		query += "\n}"
 	}
 	return query, nil
 }
