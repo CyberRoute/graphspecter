@@ -172,13 +172,52 @@ func (tr *TypeRef) String() string {
 	}
 }
 
-// Modified GenerateQuery function to include a selection set based on the type’s fields
+// generateSelectionSetWithCount recursively generates a selection set using a count-based cycle detection.
+func generateSelectionSetWithCount(s *GQLSchema, typeName string, maxDepth int, indent string, visited map[string]int) string {
+	if maxDepth <= 0 {
+		return fmt.Sprintf("\n%s!!! MAX RECURSION DEPTH REACHED !!!", indent)
+	}
+
+	// If this type appears too many times, stop recursing.
+	if count, ok := visited[typeName]; ok && count >= 2 { // allow a type to appear up to 2 times
+		return fmt.Sprintf("\n%s!!! MAX RECURSION LIMIT for %s reached !!!", indent, typeName)
+	}
+
+	// Increment the count for this type.
+	visited[typeName]++
+	defer func() {
+		visited[typeName]--
+	}()
+
+	typeDef, ok := s.Types[typeName]
+	if !ok || len(typeDef.Fields) == 0 {
+		return ""
+	}
+
+	selectionSet := ""
+	newIndent := indent + "    "
+	for _, f := range typeDef.Fields {
+		underlying := unwrapType(&f.Type)
+		if underlying.Kind == OBJECT {
+			nested := generateSelectionSetWithCount(s, underlying.Name, maxDepth-1, newIndent, visited)
+			if nested != "" {
+				selectionSet += fmt.Sprintf("\n%s%s { %s\n%s}", newIndent, f.Name, nested, newIndent)
+			} else {
+				selectionSet += fmt.Sprintf("\n%s%s", newIndent, f.Name)
+			}
+		} else {
+			selectionSet += fmt.Sprintf("\n%s%s", newIndent, f.Name)
+		}
+	}
+	return selectionSet
+}
+
+// And modify GenerateQuery to use this new helper:
 func (s *GQLSchema) GenerateQuery(fieldName string) (string, error) {
 	if s.Query == nil {
 		return "", fmt.Errorf("schema has no query type")
 	}
 
-	// Find the specified field
 	var queryField *Field
 	for _, field := range s.Query.Fields {
 		if field.Name == fieldName {
@@ -190,10 +229,7 @@ func (s *GQLSchema) GenerateQuery(fieldName string) (string, error) {
 		return "", fmt.Errorf("field '%s' not found in query type", fieldName)
 	}
 
-	// Begin building the query
 	query := fmt.Sprintf("query %s {\n  %s", fieldName, fieldName)
-
-	// Add arguments if any
 	if len(queryField.Args) > 0 {
 		query += "("
 		for i, arg := range queryField.Args {
@@ -205,31 +241,24 @@ func (s *GQLSchema) GenerateQuery(fieldName string) (string, error) {
 		query += ")"
 	}
 
-	// Determine the underlying type of the query field
 	underlying := unwrapType(&queryField.Type)
-	if typeDef, ok := s.Types[underlying.Name]; ok && len(typeDef.Fields) > 0 {
-		// Build the selection set by listing each field name
-		selectionSet := ""
-		for _, f := range typeDef.Fields {
-			// You might want to filter out fields you don't want to auto-select (e.g. nested objects)
-			selectionSet += fmt.Sprintf("\n    %s", f.Name)
-		}
+	visited := make(map[string]int)
+	selectionSet := generateSelectionSetWithCount(s, underlying.Name, 10, "  ", visited)
+	if selectionSet != "" {
 		query += " {" + selectionSet + "\n  }\n}"
 	} else {
-		// Fallback if the type definition is not found or has no fields
 		query += " {\n    # Selection set would go here\n  }\n}"
 	}
-
 	return query, nil
 }
 
-// Modified GenerateMutation function to include a selection set based on the mutation’s return type fields
+// Modified GenerateMutation function to include a nested selection set using recursive logic.
 func (s *GQLSchema) GenerateMutation(fieldName string) (string, error) {
 	if s.Mutation == nil {
 		return "", fmt.Errorf("schema has no mutation type")
 	}
 
-	// Find the specified mutation field
+	// Find the specified mutation field.
 	var mutationField *Field
 	for _, field := range s.Mutation.Fields {
 		if field.Name == fieldName {
@@ -237,15 +266,14 @@ func (s *GQLSchema) GenerateMutation(fieldName string) (string, error) {
 			break
 		}
 	}
-
 	if mutationField == nil {
 		return "", fmt.Errorf("field '%s' not found in mutation type", fieldName)
 	}
 
-	// Basic mutation generation
+	// Begin building the mutation.
 	mutation := fmt.Sprintf("mutation %s {\n  %s", fieldName, fieldName)
 
-	// Add arguments if any
+	// Add arguments if any.
 	if len(mutationField.Args) > 0 {
 		mutation += "("
 		for i, arg := range mutationField.Args {
@@ -257,17 +285,14 @@ func (s *GQLSchema) GenerateMutation(fieldName string) (string, error) {
 		mutation += ")"
 	}
 
-	// Determine the underlying type of the mutation field and generate a selection set
+	// Get the underlying type of the mutation field.
 	underlying := unwrapType(&mutationField.Type)
-	if typeDef, ok := s.Types[underlying.Name]; ok && len(typeDef.Fields) > 0 {
-		// Build the selection set by listing each field name
-		selectionSet := ""
-		for _, f := range typeDef.Fields {
-			selectionSet += fmt.Sprintf("\n    %s", f.Name)
-		}
+	// Use the same recursive helper with cycle detection.
+	visited := make(map[string]int)
+	selectionSet := generateSelectionSetWithCount(s, underlying.Name, 10, "  ", visited)
+	if selectionSet != "" {
 		mutation += " {" + selectionSet + "\n  }\n}"
 	} else {
-		// Fallback if the type definition is not found or has no fields
 		mutation += " {\n    # Selection set would go here\n  }\n}"
 	}
 
