@@ -12,6 +12,7 @@ import (
 	"github.com/CyberRoute/graphspecter/pkg/introspection"
 	"github.com/CyberRoute/graphspecter/pkg/logger"
 	"github.com/CyberRoute/graphspecter/pkg/schema"
+	"github.com/CyberRoute/graphspecter/pkg/types"
 )
 
 func DisplayLogo() {
@@ -74,8 +75,8 @@ func HandleSchemaFile(filePath, listOption, queryOption, mutationOption string, 
 	if allQueries || queryOption != "" {
 		if allQueries {
 			// Print all queries
-			for _, queryName := range schemaObj.ListQueries() {
-				query, err := schemaObj.GenerateQuery(queryName)
+			for _, queryName := range schema.ListQueries(schemaObj) {
+				query, err := schema.GenerateQuery(schemaObj, queryName)
 				if err != nil {
 					logger.Error("Failed to generate query for %s: %v", queryName, err)
 					continue
@@ -85,7 +86,7 @@ func HandleSchemaFile(filePath, listOption, queryOption, mutationOption string, 
 		} else {
 			// Print specific queries
 			for _, queryName := range strings.Split(queryOption, ",") {
-				query, err := schemaObj.GenerateQuery(queryName)
+				query, err := schema.GenerateQuery(schemaObj, queryName)
 				if err != nil {
 					logger.Error("Failed to generate query for %s: %v", queryName, err)
 					continue
@@ -99,8 +100,8 @@ func HandleSchemaFile(filePath, listOption, queryOption, mutationOption string, 
 	if (allMutations || mutationOption != "") && schemaObj.Mutation != nil {
 		if allMutations {
 			// Print all mutations
-			for _, mutationName := range schemaObj.ListMutations() {
-				mutation, err := schemaObj.GenerateMutation(mutationName)
+			for _, mutationName := range schema.ListMutations(schemaObj) {
+				mutation, err := schema.GenerateMutation(schemaObj, mutationName)
 				if err != nil {
 					logger.Error("Failed to generate mutation for %s: %v", mutationName, err)
 					continue
@@ -110,7 +111,7 @@ func HandleSchemaFile(filePath, listOption, queryOption, mutationOption string, 
 		} else {
 			// Print specific mutations
 			for _, mutationName := range strings.Split(mutationOption, ",") {
-				mutation, err := schemaObj.GenerateMutation(mutationName)
+				mutation, err := schema.GenerateMutation(schemaObj, mutationName)
 				if err != nil {
 					logger.Error("Failed to generate mutation for %s: %v", mutationName, err)
 					continue
@@ -122,15 +123,15 @@ func HandleSchemaFile(filePath, listOption, queryOption, mutationOption string, 
 }
 
 // PrintAvailableOperations prints the names of queries and/or mutations in the schema.
-func PrintAvailableOperations(schemaObj *schema.GQLSchema, listOption string) {
+func PrintAvailableOperations(schemaObj *types.GQLSchema, listOption string) {
 	if listOption == "queries" || listOption == "all" {
-		for _, queryName := range schemaObj.ListQueries() {
+		for _, queryName := range schema.ListQueries(schemaObj) {
 			fmt.Printf("query %s\n", queryName)
 		}
 	}
 
 	if (listOption == "mutations" || listOption == "all") && schemaObj.Mutation != nil {
-		for _, mutationName := range schemaObj.ListMutations() {
+		for _, mutationName := range schema.ListMutations(schemaObj) {
 			fmt.Printf("mutation %s\n", mutationName)
 		}
 	}

@@ -7,106 +7,11 @@ import (
 	"strings"
 
 	"github.com/CyberRoute/graphspecter/pkg/logger"
+	"github.com/CyberRoute/graphspecter/pkg/types"
 )
-
-// TypeKind represents the different kinds of GraphQL types
-type TypeKind string
-
-const (
-	// Type kind constants
-	SCALAR       TypeKind = "SCALAR"
-	OBJECT       TypeKind = "OBJECT"
-	INTERFACE    TypeKind = "INTERFACE"
-	UNION        TypeKind = "UNION"
-	ENUM         TypeKind = "ENUM"
-	INPUT_OBJECT TypeKind = "INPUT_OBJECT"
-	LIST         TypeKind = "LIST"
-	NON_NULL     TypeKind = "NON_NULL"
-)
-
-// Field represents a GraphQL field with its arguments and type information
-type Field struct {
-	Name              string       `json:"name"`
-	Description       string       `json:"description"`
-	Args              []InputValue `json:"args"`
-	Type              TypeRef      `json:"type"`
-	IsDeprecated      bool         `json:"isDeprecated"`
-	DeprecationReason string       `json:"deprecationReason"`
-}
-
-// InputValue represents an input argument or field
-type InputValue struct {
-	Name         string  `json:"name"`
-	Description  string  `json:"description"`
-	Type         TypeRef `json:"type"`
-	DefaultValue string  `json:"defaultValue"`
-}
-
-// TypeRef represents a type reference, which can be nested for things like [String!]!
-type TypeRef struct {
-	Kind   TypeKind `json:"kind"`
-	Name   string   `json:"name"`
-	OfType *TypeRef `json:"ofType"`
-}
-
-// EnumValue represents a value in an enum type
-type EnumValue struct {
-	Name              string `json:"name"`
-	Description       string `json:"description"`
-	IsDeprecated      bool   `json:"isDeprecated"`
-	DeprecationReason string `json:"deprecationReason"`
-}
-
-// Type represents a GraphQL type in the schema
-type Type struct {
-	Kind          TypeKind     `json:"kind"`
-	Name          string       `json:"name"`
-	Description   string       `json:"description"`
-	Fields        []Field      `json:"fields"`
-	InputFields   []InputValue `json:"inputFields"`
-	Interfaces    []TypeRef    `json:"interfaces"`
-	EnumValues    []EnumValue  `json:"enumValues"`
-	PossibleTypes []TypeRef    `json:"possibleTypes"`
-}
-
-// SchemaType represents a top-level schema type (query, mutation, subscription)
-type SchemaType struct {
-	Name string `json:"name"`
-}
-
-// Schema represents the top-level GraphQL schema
-type Schema struct {
-	QueryType        SchemaType  `json:"queryType"`
-	MutationType     SchemaType  `json:"mutationType"`
-	SubscriptionType SchemaType  `json:"subscriptionType"`
-	Types            []Type      `json:"types"`
-	Directives       []Directive `json:"directives"`
-}
-
-// Directive represents a GraphQL directive
-type Directive struct {
-	Name        string       `json:"name"`
-	Description string       `json:"description"`
-	Locations   []string     `json:"locations"`
-	Args        []InputValue `json:"args"`
-}
-
-// IntrospectionResponse represents the full response from an introspection query
-type IntrospectionResponse struct {
-	Data struct {
-		Schema Schema `json:"__schema"`
-	} `json:"data"`
-}
-
-// GQLSchema is the main struct that holds the parsed schema information
-type GQLSchema struct {
-	Types    map[string]Type
-	Query    *Type
-	Mutation *Type
-}
 
 // LoadFromFile loads a GraphQL schema from an introspection result JSON file
-func LoadFromFile(filePath string) (*GQLSchema, error) {
+func LoadFromFile(filePath string) (*types.GQLSchema, error) {
 	logger.Info("Loading schema from file: %s", filePath)
 
 	// Read file content
@@ -116,14 +21,14 @@ func LoadFromFile(filePath string) (*GQLSchema, error) {
 	}
 
 	// Parse JSON
-	var response IntrospectionResponse
+	var response types.IntrospectionResponse
 	if err := json.Unmarshal(fileContent, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
 
 	// Create and initialize schema
-	schema := &GQLSchema{
-		Types: make(map[string]Type),
+	schema := &types.GQLSchema{
+		Types: make(map[string]types.Type),
 	}
 
 	// Add all types to the map for easy lookup
@@ -152,29 +57,15 @@ func LoadFromFile(filePath string) (*GQLSchema, error) {
 }
 
 // Helper function to recursively unwrap NON_NULL and LIST wrappers
-func unwrapType(tr *TypeRef) *TypeRef {
-	for tr.Kind == NON_NULL || tr.Kind == LIST {
+func unwrapType(tr *types.TypeRef) *types.TypeRef {
+	for tr.Kind == types.NON_NULL || tr.Kind == types.LIST {
 		tr = tr.OfType
 	}
 	return tr
 }
 
-func (tr *TypeRef) String() string {
-	if tr == nil {
-		return ""
-	}
-	switch tr.Kind {
-	case NON_NULL:
-		return tr.OfType.String() + "!"
-	case LIST:
-		return "[" + tr.OfType.String() + "]"
-	default:
-		return tr.Name
-	}
-}
-
 // generateSelectionSetWithCount recursively generates a selection set using a count-based cycle detection.
-func generateSelectionSetWithCount(s *GQLSchema, typeName string, maxDepth int, indent string, visited map[string]int) string {
+func generateSelectionSetWithCount(s *types.GQLSchema, typeName string, maxDepth int, indent string, visited map[string]int) string {
 	if maxDepth <= 0 {
 		return fmt.Sprintf("\n%s!!! MAX RECURSION DEPTH REACHED !!!", indent)
 	}
@@ -199,7 +90,7 @@ func generateSelectionSetWithCount(s *GQLSchema, typeName string, maxDepth int, 
 	newIndent := indent + "    "
 	for _, f := range typeDef.Fields {
 		underlying := unwrapType(&f.Type)
-		if underlying.Kind == OBJECT {
+		if underlying.Kind == types.OBJECT {
 			nested := generateSelectionSetWithCount(s, underlying.Name, maxDepth-1, newIndent, visited)
 			if nested != "" && !strings.Contains(nested, "MAX RECURSION") {
 				selectionSet += fmt.Sprintf("\n%s%s { %s\n%s}", newIndent, f.Name, nested, newIndent)
@@ -213,13 +104,13 @@ func generateSelectionSetWithCount(s *GQLSchema, typeName string, maxDepth int, 
 	return selectionSet
 }
 
-// And modify GenerateQuery to use this new helper:
-func (s *GQLSchema) GenerateQuery(fieldName string) (string, error) {
+// GenerateQuery generates a GraphQL query for the specified field
+func GenerateQuery(s *types.GQLSchema, fieldName string) (string, error) {
 	if s.Query == nil {
 		return "", fmt.Errorf("schema has no query type")
 	}
 
-	var queryField *Field
+	var queryField *types.Field
 	for _, field := range s.Query.Fields {
 		if field.Name == fieldName {
 			queryField = &field
@@ -254,14 +145,14 @@ func (s *GQLSchema) GenerateQuery(fieldName string) (string, error) {
 	return query, nil
 }
 
-// Modified GenerateMutation function to include a nested selection set using recursive logic.
-func (s *GQLSchema) GenerateMutation(fieldName string) (string, error) {
+// GenerateMutation generates a GraphQL mutation for the specified field
+func GenerateMutation(s *types.GQLSchema, fieldName string) (string, error) {
 	if s.Mutation == nil {
 		return "", fmt.Errorf("schema has no mutation type")
 	}
 
 	// Find the specified mutation field.
-	var mutationField *Field
+	var mutationField *types.Field
 	for _, field := range s.Mutation.Fields {
 		if field.Name == fieldName {
 			mutationField = &field
@@ -302,7 +193,7 @@ func (s *GQLSchema) GenerateMutation(fieldName string) (string, error) {
 }
 
 // ListQueries returns all query names in the schema
-func (s *GQLSchema) ListQueries() []string {
+func ListQueries(s *types.GQLSchema) []string {
 	var queries []string
 
 	if s.Query == nil {
@@ -317,7 +208,7 @@ func (s *GQLSchema) ListQueries() []string {
 }
 
 // ListMutations returns all mutation names in the schema
-func (s *GQLSchema) ListMutations() []string {
+func ListMutations(s *types.GQLSchema) []string {
 	var mutations []string
 
 	if s.Mutation == nil {
