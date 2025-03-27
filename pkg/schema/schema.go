@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/CyberRoute/graphspecter/pkg/logger"
 )
@@ -200,7 +201,7 @@ func generateSelectionSetWithCount(s *GQLSchema, typeName string, maxDepth int, 
 		underlying := unwrapType(&f.Type)
 		if underlying.Kind == OBJECT {
 			nested := generateSelectionSetWithCount(s, underlying.Name, maxDepth-1, newIndent, visited)
-			if nested != "" {
+			if nested != "" && !strings.Contains(nested, "MAX RECURSION") {
 				selectionSet += fmt.Sprintf("\n%s%s { %s\n%s}", newIndent, f.Name, nested, newIndent)
 			} else {
 				selectionSet += fmt.Sprintf("\n%s%s", newIndent, f.Name)
