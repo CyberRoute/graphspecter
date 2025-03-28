@@ -23,6 +23,7 @@ func main() {
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 	logFile := flag.String("log-file", "", "Log to file in addition to stdout")
 	noColor := flag.Bool("no-color", false, "Disable colored output")
+	maxDepth := flag.Int("max-depth", 10, "Set the maximum level of nested field traversal when generating GraphQL selection sets from the introspection schema")
 
 	// Schema parsing options
 	schemaFile := flag.String("schema-file", "", "File with the GraphQL schema (introspection JSON)")
@@ -43,7 +44,7 @@ func main() {
 
 	// Handle schema parsing if the file option is provided
 	if *schemaFile != "" {
-		cli.HandleSchemaFile(*schemaFile, *listOption, *queryOption, *mutationOption, *allQueriesFlag, *allMutationsFlag)
+		cli.HandleSchemaFile(*schemaFile, *listOption, *queryOption, *mutationOption, *allQueriesFlag, *allMutationsFlag, *maxDepth)
 		os.Exit(0)
 	}
 	cli.DisplayLogo()

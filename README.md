@@ -59,6 +59,8 @@ go run main.go -base http://192.168.1.1:5013 -detect
     	Log to file in addition to stdout
   -log-level string
     	Log level (debug, info, warn, error) (default "info")
+  -max-depth int
+    	Set the maximum level of nested field traversal when generating GraphQL selection sets from the introspection schema (default 10)
   -mutation string
     	Only print named mutations (comma-separated list of mutation names)
   -no-color

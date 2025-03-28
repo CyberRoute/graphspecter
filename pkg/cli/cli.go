@@ -47,7 +47,7 @@ func SetupSignalHandler(parent context.Context) (context.Context, context.Cancel
 }
 
 // HandleSchemaFile processes an introspection JSON file and handles schema-related operations.
-func HandleSchemaFile(filePath, listOption, queryOption, mutationOption string, allQueries, allMutations bool) {
+func HandleSchemaFile(filePath, listOption, queryOption, mutationOption string, allQueries, allMutations bool, maxDepth int) {
 	// Load the schema from file
 	schemaObj, err := schema.LoadFromFile(filePath)
 	if err != nil {
@@ -61,12 +61,11 @@ func HandleSchemaFile(filePath, listOption, queryOption, mutationOption string, 
 		return
 	}
 
-	// If explicit queries (-q) or mutations (-m) provided, they take priority
+	// Determine whether to print specific queries/mutations or all.
 	if queryOption != "" || mutationOption != "" {
 		allQueries = false
 		allMutations = false
 	} else if !allQueries && !allMutations {
-		// Otherwise print all queries and mutations, unless one of the -Q / -M flags is specified
 		allQueries = true
 		allMutations = true
 	}
@@ -74,9 +73,8 @@ func HandleSchemaFile(filePath, listOption, queryOption, mutationOption string, 
 	// Print queries
 	if allQueries || queryOption != "" {
 		if allQueries {
-			// Print all queries
 			for _, queryName := range schema.ListQueries(schemaObj) {
-				query, err := schema.GenerateQuery(schemaObj, queryName)
+				query, err := schema.GenerateQuery(schemaObj, queryName, maxDepth)
 				if err != nil {
 					logger.Error("Failed to generate query for %s: %v", queryName, err)
 					continue
@@ -84,9 +82,8 @@ func HandleSchemaFile(filePath, listOption, queryOption, mutationOption string, 
 				fmt.Println(query)
 			}
 		} else {
-			// Print specific queries
 			for _, queryName := range strings.Split(queryOption, ",") {
-				query, err := schema.GenerateQuery(schemaObj, queryName)
+				query, err := schema.GenerateQuery(schemaObj, queryName, maxDepth)
 				if err != nil {
 					logger.Error("Failed to generate query for %s: %v", queryName, err)
 					continue
@@ -99,9 +96,8 @@ func HandleSchemaFile(filePath, listOption, queryOption, mutationOption string, 
 	// Print mutations
 	if (allMutations || mutationOption != "") && schemaObj.Mutation != nil {
 		if allMutations {
-			// Print all mutations
 			for _, mutationName := range schema.ListMutations(schemaObj) {
-				mutation, err := schema.GenerateMutation(schemaObj, mutationName)
+				mutation, err := schema.GenerateMutation(schemaObj, mutationName, maxDepth)
 				if err != nil {
 					logger.Error("Failed to generate mutation for %s: %v", mutationName, err)
 					continue
@@ -109,9 +105,8 @@ func HandleSchemaFile(filePath, listOption, queryOption, mutationOption string, 
 				fmt.Println(mutation)
 			}
 		} else {
-			// Print specific mutations
 			for _, mutationName := range strings.Split(mutationOption, ",") {
-				mutation, err := schema.GenerateMutation(schemaObj, mutationName)
+				mutation, err := schema.GenerateMutation(schemaObj, mutationName, maxDepth)
 				if err != nil {
 					logger.Error("Failed to generate mutation for %s: %v", mutationName, err)
 					continue
