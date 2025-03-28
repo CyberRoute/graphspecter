@@ -4,6 +4,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -158,19 +159,7 @@ func AuditEndpoints(timeoutCtx context.Context, targetURLs []string, headers map
 		if introspection.IsIntrospectionEnabled(introspectionResult) {
 			logger.Warn("WARNING: Introspection is ENABLED on %s!", targetURL)
 			outName := outputFile
-			if len(targetURLs) > 1 {
-				parts := strings.Split(targetURL, "/")
-				endpointPart := "root"
-				if len(parts) > 3 {
-					endpointPart = strings.ReplaceAll(strings.Join(parts[3:], "_"), "/", "_")
-					if endpointPart == "" {
-						endpointPart = "root"
-					}
-				}
-				ext := ".json"
-				baseName := strings.TrimSuffix(outputFile, ext)
-				outName = fmt.Sprintf("%s_%s%s", baseName, endpointPart, ext)
-			}
+			outName = generateOutputFileName(outputFile, targetURL)
 			err = introspection.WriteIntrospectionToFile(introspectionResult, outName)
 			if err != nil {
 				logger.Error("Error writing introspection result to file: %v", err)
@@ -190,4 +179,19 @@ func AuditEndpoints(timeoutCtx context.Context, targetURLs []string, headers map
 		logger.Info("Introspection appears to be disabled on all checked endpoints")
 	}
 	logger.Info("Audit completed")
+}
+
+func generateOutputFileName(defaultFile, targetURL string) string {
+	parsed, err := url.Parse(targetURL)
+	if err != nil {
+		return defaultFile
+	}
+	cleanPath := strings.Trim(parsed.Path, "/")
+	suffix := "root"
+	if cleanPath != "" {
+		segments := strings.Split(cleanPath, "/")
+		suffix = segments[len(segments)-1]
+	}
+	baseName := strings.TrimSuffix(defaultFile, ".json")
+	return fmt.Sprintf("%s_%s.json", baseName, suffix)
 }
