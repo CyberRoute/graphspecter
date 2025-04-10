@@ -20,7 +20,6 @@ graphspecter
 ├── go.sum
 ├── img
 │   └── graphspecter.png
-├── introspection_graphql.json
 ├── main.go
 └── pkg
     ├── cli
