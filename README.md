@@ -72,6 +72,8 @@ go run main.go -base http://192.168.1.1:5013 -detect
     	File with the GraphQL schema (introspection JSON)
   -timeout duration
     	Timeout for operations (e.g., 30s, 1m) (default 1s)
+  -ws-url string
+    	WebSocket URL for subscriptions (default "ws://192.168.1.100:5013/subscriptions")
 ```
 ## Building
 
