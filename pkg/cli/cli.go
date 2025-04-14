@@ -73,48 +73,41 @@ func HandleSchemaFile(filePath, listOption, queryOption, mutationOption string, 
 
 	// Print queries
 	if allQueries || queryOption != "" {
+		var queryNames []string
 		if allQueries {
-			for _, queryName := range schema.ListQueries(schemaObj) {
-				query, err := schema.GenerateQuery(schemaObj, queryName, maxDepth)
-				if err != nil {
-					logger.Error("Failed to generate query for %s: %v", queryName, err)
-					continue
-				}
-				fmt.Println(query)
-			}
+			queryNames = schema.ListQueries(schemaObj)
 		} else {
-			for _, queryName := range strings.Split(queryOption, ",") {
-				query, err := schema.GenerateQuery(schemaObj, queryName, maxDepth)
-				if err != nil {
-					logger.Error("Failed to generate query for %s: %v", queryName, err)
-					continue
-				}
-				fmt.Println(query)
-			}
+			queryNames = strings.Split(queryOption, ",")
 		}
+		GenerateAndPrintOperations(schema.GenerateQuery, schemaObj, queryNames, maxDepth, "query")
 	}
-
+	
 	// Print mutations
 	if (allMutations || mutationOption != "") && schemaObj.Mutation != nil {
+		var mutationNames []string
 		if allMutations {
-			for _, mutationName := range schema.ListMutations(schemaObj) {
-				mutation, err := schema.GenerateMutation(schemaObj, mutationName, maxDepth)
-				if err != nil {
-					logger.Error("Failed to generate mutation for %s: %v", mutationName, err)
-					continue
-				}
-				fmt.Println(mutation)
-			}
+			mutationNames = schema.ListMutations(schemaObj)
 		} else {
-			for _, mutationName := range strings.Split(mutationOption, ",") {
-				mutation, err := schema.GenerateMutation(schemaObj, mutationName, maxDepth)
-				if err != nil {
-					logger.Error("Failed to generate mutation for %s: %v", mutationName, err)
-					continue
-				}
-				fmt.Println(mutation)
-			}
+			mutationNames = strings.Split(mutationOption, ",")
 		}
+		GenerateAndPrintOperations(schema.GenerateMutation, schemaObj, mutationNames, maxDepth, "mutation")
+	}
+}
+
+func GenerateAndPrintOperations(
+	generateFn func(*types.GQLSchema, string, int) (string, error),
+	schemaObj *types.GQLSchema,
+	names []string,
+	maxDepth int,
+	opType string,
+) {
+	for _, name := range names {
+		op, err := generateFn(schemaObj, name, maxDepth)
+		if err != nil {
+			logger.Error("Failed to generate %s for %s: %v", opType, name, err)
+			continue
+		}
+		fmt.Println(op)
 	}
 }
 
