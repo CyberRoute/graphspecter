@@ -7,43 +7,24 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/CyberRoute/graphspecter/pkg/cli"
+	"github.com/CyberRoute/graphspecter/pkg/cmd"
 	"github.com/CyberRoute/graphspecter/pkg/logger"
 	"github.com/CyberRoute/graphspecter/pkg/network"
 	"github.com/CyberRoute/graphspecter/pkg/subscription"
 )
 
 func main() {
-	// Define flags.
-	baseURL := flag.String("base", "", "Base URL of the target (e.g. http://192.168.1.1:5013)")
-	detect := flag.Bool("detect", false, "Enable detection mode to find a GraphQL endpoint")
-	outputFile := flag.String("output", "introspection.json", "Output file for introspection results")
-	timeout := flag.Duration("timeout", 1*time.Second, "Timeout for operations (e.g., 30s, 1m)")
-	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
-	logFile := flag.String("log-file", "", "Log to file in addition to stdout")
-	noColor := flag.Bool("no-color", false, "Disable colored output")
-	maxDepth := flag.Int("max-depth", 10, "Set the maximum level of nested field traversal when generating GraphQL selection sets from the introspection schema")
-	// Schema parsing options.
-	schemaFile := flag.String("schema-file", "", "File with the GraphQL schema (introspection JSON)")
-	list := flag.String("list", "", "Parse GraphQL schema and list queries, mutations or both (valid values: 'queries', 'mutations' or 'all')")
-	query := flag.String("query", "", "Only print named queries (comma-separated list of query names)")
-	mutation := flag.String("mutation", "", "Only print named mutations (comma-separated list of mutation names)")
-	allQueries := flag.Bool("all-queries", false, "Only print queries (by default both queries and mutations are printed)")
-	allMutations := flag.Bool("all-mutations", false, "Only print mutations (by default both queries and mutations are printed)")
-	subscribe := flag.Bool("subscribe", false, "Enable subscription mode to listen for paste updates")
-	subQuery := flag.String("sub-query", "", "GraphQL subscription query to execute")
-	wsURL := flag.String("ws-url", "ws://192.168.1.100:5013/subscriptions", "WebSocket URL for subscriptions")
 
 	// Parse all command-line flags.
-	flag.Parse()
+	cfg := cmd.ParseFlags()
 
 	// If subscribe flag is set, wait for user input before subscribing.
-	if *subscribe {
+	if cfg.Subscribe {
 		var query string
-		if *subQuery != "" {
-			query = *subQuery
+		if cfg.SubQuery != "" {
+			query = cfg.SubQuery
 		} else {
 			fmt.Println("Subscription mode enabled. Please enter your subscription query:")
 			reader := bufio.NewReader(os.Stdin)
@@ -56,7 +37,7 @@ func main() {
 		}
 
 		// Attempt to subscribe using the generic function that tries both message types.
-		conn, err := subscription.SubscribeToQuery(*wsURL, query)
+		conn, err := subscription.SubscribeToQuery(cfg.WSURL, query)
 		if err != nil {
 			logger.Error("Subscription error: %v", err)
 			os.Exit(1)
@@ -67,35 +48,35 @@ func main() {
 	}
 
 	// If neither a schema file nor a base URL is provided, show usage and exit.
-	if *schemaFile == "" && *baseURL == "" {
+	if cfg.SchemaFile == "" && cfg.BaseURL == "" {
 		flag.Usage()
 		os.Exit(0)
 	}
 
 	// Configure logging.
-	logger.SetupLogging(*logLevel, *logFile, !*noColor)
+	logger.SetupLogging(cfg.LogLevel, cfg.LogFile, !cfg.NoColor)
 
 	// Handle schema parsing if the file option is provided.
-	if *schemaFile != "" {
-		cli.HandleSchemaFile(*schemaFile, *list, *query, *mutation, *allQueries, *allMutations, *maxDepth)
+	if cfg.SchemaFile != "" {
+		cli.HandleSchemaFile(cfg.SchemaFile, cfg.List, cfg.Query, cfg.Mutation, cfg.AllQueries, cfg.AllMutations, cfg.MaxDepth)
 		os.Exit(0)
 	}
 
 	cli.DisplayLogo()
 	logger.Info("GraphSpecter v1.0.0 starting...")
-	logger.Debug("Timeout set to %s", *timeout)
+	logger.Debug("Timeout set to %s", cfg.Timeout)
 
 	// Create a context with the user-specified timeout.
-	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), *timeout)
+	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), cfg.Timeout)
 	defer timeoutCancel()
 
 	// Set up target URLs for network operations.
 	var targetURLs []string
 
-	if *detect {
+	if cfg.Detect {
 		// Detection mode.
 		logger.Info("Detection mode enabled. Scanning for GraphQL endpoints...")
-		detectedEndpoints, err := network.DetectAllGraphQLEndpointsWithContext(timeoutCtx, *baseURL, false)
+		detectedEndpoints, err := network.DetectAllGraphQLEndpointsWithContext(timeoutCtx, cfg.BaseURL, false)
 		if err != nil {
 			logger.Error("Detection failed: %v", err)
 			os.Exit(1)
@@ -108,8 +89,8 @@ func main() {
 		logger.Info("Found %d GraphQL endpoints", len(targetURLs))
 	} else {
 		// Use the base URL directly if no detection is provided.
-		targetURLs = append(targetURLs, *baseURL)
-		logger.Info("Using base URL as target: %s", *baseURL)
+		targetURLs = append(targetURLs, cfg.BaseURL)
+		logger.Info("Using base URL as target: %s", cfg.BaseURL)
 	}
 
 	logger.Info("Starting GraphQL security audit...")
@@ -123,5 +104,5 @@ func main() {
 		headers["Authorization"] = "Bearer " + authToken
 	}
 
-	cli.AuditEndpoints(timeoutCtx, targetURLs, headers, *outputFile)
+	cli.AuditEndpoints(timeoutCtx, targetURLs, headers, cfg.OutputFile)
 }

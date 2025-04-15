@@ -1,5 +1,33 @@
 package types
 
+import "time"
+
+// CLI types
+type CLIConfig struct {
+	BaseURL       string
+	Detect        bool
+	OutputFile    string
+	Timeout       time.Duration
+	LogLevel      string
+	LogFile       string
+	NoColor       bool
+	MaxDepth      int
+	SchemaFile    string
+	List          string
+	Query         string
+	Mutation      string
+	AllQueries    bool
+	AllMutations  bool
+	Subscribe     bool
+	SubQuery      string
+	WSURL         string
+	Execute       bool
+	QueryString   string
+	QueryFile     string
+	Variables     string
+	VariablesFile string
+}
+
 // GraphQLRequest represents a GraphQL request structure.
 type GraphQLRequest struct {
 	Query         string                 `json:"query"`

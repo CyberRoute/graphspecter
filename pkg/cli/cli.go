@@ -81,7 +81,7 @@ func HandleSchemaFile(filePath, listOption, queryOption, mutationOption string, 
 		}
 		GenerateAndPrintOperations(schema.GenerateQuery, schemaObj, queryNames, maxDepth, "query")
 	}
-	
+
 	// Print mutations
 	if (allMutations || mutationOption != "") && schemaObj.Mutation != nil {
 		var mutationNames []string
