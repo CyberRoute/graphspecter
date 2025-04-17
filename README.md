@@ -13,27 +13,35 @@
 ## Project Structure
 
 ```
-graphspecter
-├── LICENSE
-├── README.md
+├── config.yml
 ├── go.mod
 ├── go.sum
 ├── img
 │   └── graphspecter.png
+├── LICENSE
 ├── main.go
-└── pkg
-    ├── cli
-    │   └── cli.go
-    ├── introspection
-    │   └── introspection.go
-    ├── logger
-    │   └── logger.go
-    ├── network
-    │   └── client.go
-    ├── schema
-    │   └── schema.go
-    └── types
-        └── types.go
+├── pkg
+│   ├── cli
+│   │   └── cli.go
+│   ├── cmd
+│   │   └── root.go
+│   ├── config
+│   │   ├── config.go
+│   │   └── merge.go
+│   ├── introspection
+│   │   └── introspection.go
+│   ├── logger
+│   │   └── logger.go
+│   ├── network
+│   │   └── client.go
+│   ├── schema
+│   │   └── schema.go
+│   ├── subscription
+│   │   └── client.go
+│   └── types
+│       └── types.go
+├── README.md
+
 ```
 
 ## Usage
@@ -44,34 +52,52 @@ go run main.go -base http://192.168.1.1:5013 -detect
 
 ### Options
 ```
+  Usage of:
+
   -all-mutations
-    	Only print mutations (by default both queries and mutations are printed)
+    	Print all mutations
   -all-queries
-    	Only print queries (by default both queries and mutations are printed)
+    	Print all queries
   -base string
     	Base URL of the target (e.g. http://192.168.1.1:5013)
+  -config string
+    	Path to config file (.yaml or .json)
   -detect
     	Enable detection mode to find a GraphQL endpoint
+  -execute
+    	Execute a query or mutation (future feature)
   -list string
-    	Parse GraphQL schema and list queries, mutations or both (valid values: 'queries', 'mutations' or 'all')
+    	List queries, mutations or both (valid: 'queries', 'mutations', 'all')
   -log-file string
     	Log to file in addition to stdout
   -log-level string
-    	Log level (debug, info, warn, error) (default "info")
+    	Log level (debug, info, warn, error)
   -max-depth int
-    	Set the maximum level of nested field traversal when generating GraphQL selection sets from the introspection schema (default 10)
+    	Maximum depth for selection sets (default 10)
   -mutation string
-    	Only print named mutations (comma-separated list of mutation names)
+    	Print named mutations (comma-separated)
   -no-color
     	Disable colored output
   -output string
-    	Output file for introspection results (default "introspection.json")
+    	Dump introspection schema (default "introspection_<endpoint>.json")
   -query string
-    	Only print named queries (comma-separated list of query names)
+    	Print named queries (comma-separated)
+  -query-file string
+    	Path to file containing GraphQL query
+  -query-string string
+    	GraphQL query string to execute
   -schema-file string
     	File with the GraphQL schema (introspection JSON)
+  -sub-query string
+    	Subscription query to execute
+  -subscribe
+    	Enable subscription mode
   -timeout duration
     	Timeout for operations (e.g., 30s, 1m) (default 1s)
+  -vars string
+    	Query variables as JSON string
+  -vars-file string
+    	Path to JSON file with variables
   -ws-url string
     	WebSocket URL for subscriptions (default "ws://192.168.1.100:5013/subscriptions")
 ```
