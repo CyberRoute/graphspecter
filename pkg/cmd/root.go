@@ -11,9 +11,9 @@ func ParseFlags() *types.CLIConfig {
 
 	flag.StringVar(&cfg.BaseURL, "base", "", "Base URL of the target (e.g. http://192.168.1.1:5013)")
 	flag.BoolVar(&cfg.Detect, "detect", false, "Enable detection mode to find a GraphQL endpoint")
-	flag.StringVar(&cfg.OutputFile, "output", "introspection.json", "Output file for introspection results")
+	flag.StringVar(&cfg.OutputFile, "output", "introspection_<endpoint>.json", "Dump introspection schema")
 	flag.DurationVar(&cfg.Timeout, "timeout", 1*time.Second, "Timeout for operations (e.g., 30s, 1m)")
-	flag.StringVar(&cfg.LogLevel, "log-level", "info", "Log level (debug, info, warn, error)")
+	flag.StringVar(&cfg.LogLevel, "log-level", "", "Log level (debug, info, warn, error)")
 	flag.StringVar(&cfg.LogFile, "log-file", "", "Log to file in addition to stdout")
 	flag.BoolVar(&cfg.NoColor, "no-color", false, "Disable colored output")
 	flag.IntVar(&cfg.MaxDepth, "max-depth", 10, "Maximum depth for selection sets")
@@ -26,6 +26,7 @@ func ParseFlags() *types.CLIConfig {
 	flag.BoolVar(&cfg.Subscribe, "subscribe", false, "Enable subscription mode")
 	flag.StringVar(&cfg.SubQuery, "sub-query", "", "Subscription query to execute")
 	flag.StringVar(&cfg.WSURL, "ws-url", "ws://192.168.1.100:5013/subscriptions", "WebSocket URL for subscriptions")
+	flag.StringVar(&cfg.ConfigFile, "config", "", "Path to config file (.yaml or .json)")
 
 	// Placeholder for future use
 	flag.BoolVar(&cfg.Execute, "execute", false, "Execute a query or mutation (future feature)")
@@ -37,4 +38,3 @@ func ParseFlags() *types.CLIConfig {
 	flag.Parse()
 	return cfg
 }
-

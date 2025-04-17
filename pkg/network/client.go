@@ -70,24 +70,27 @@ func SendGraphQLRequestWithContext(ctx context.Context, url string, query string
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
+	logger.Debug("→ POST %s", url)
 
 	req.Header.Set("Content-Type", "application/json")
 	for key, value := range headers {
+		logger.Debug("→ Request header %s: %s", key, value)
 		req.Header.Set(key, value)
 	}
+	logger.Debug("→ Request body: %s", string(jsonData))
 
 	client := &http.Client{
 		Timeout: DefaultTimeout,
 	}
 
-	logger.Debug("Sending GraphQL request to %s", url)
+	logger.Debug("→ Sending GraphQL request to %s", url)
 	resp, err := client.Do(req)
 	if err != nil {
 		if ctx.Err() == context.Canceled {
-			logger.Debug("Request to %s was canceled", url)
+			logger.Debug("→ Request to %s was canceled", url)
 			return nil, fmt.Errorf("request canceled by user or another operation completed first")
 		} else if ctx.Err() == context.DeadlineExceeded {
-			logger.Debug("Request to %s timed out", url)
+			logger.Debug("→ Request to %s timed out", url)
 			return nil, fmt.Errorf("request timed out, consider increasing timeout")
 		} else {
 			logger.Error("Error sending request: %v", err)
@@ -105,7 +108,7 @@ func SendGraphQLRequestWithContext(ctx context.Context, url string, query string
 	// Check content type to make sure we're getting JSON
 	contentType := resp.Header.Get("Content-Type")
 	if contentType != "" && !containsSubstring(contentType, "json") {
-		logger.Debug("Non-JSON response detected (Content-Type: %s)", contentType)
+		logger.Debug("→ Non-JSON response detected (Content-Type: %s)", contentType)
 		return nil, fmt.Errorf("non-JSON response received (Content-Type: %s)", contentType)
 	}
 
@@ -113,14 +116,14 @@ func SendGraphQLRequestWithContext(ctx context.Context, url string, query string
 	if err := json.Unmarshal(body, &result); err != nil {
 		// If content starts with "<", it's likely HTML
 		if len(body) > 0 && body[0] == '<' {
-			logger.Debug("HTML response detected instead of JSON")
+			logger.Debug("→ HTML response detected instead of JSON")
 			return nil, fmt.Errorf("HTML response received instead of expected JSON")
 		}
 		logger.Error("Error parsing response: %v", err)
 		return nil, fmt.Errorf("error parsing response: %w", err)
 	}
 
-	logger.Debug("Received response from %s, status: %d", url, resp.StatusCode)
+	logger.Debug("→ Received response from %s, status: %d", url, resp.StatusCode)
 	return result, nil
 }
 
@@ -177,7 +180,7 @@ func DetectAllGraphQLEndpointsWithContext(ctx context.Context, baseURL string, s
 				return // Context was cancelled (timeout or stopOnFirst)
 			default:
 				endpoint := baseURL + p
-				logger.Debug("Checking endpoint: %s", endpoint)
+				logger.Debug("→ Checking endpoint: %s", endpoint)
 				isValid, err := IsGraphQLEndpointWithContext(ctx, endpoint)
 
 				mutex.Lock()
@@ -185,7 +188,7 @@ func DetectAllGraphQLEndpointsWithContext(ctx context.Context, baseURL string, s
 				mutex.Unlock()
 
 				if err != nil {
-					logger.Debug("Error checking %s: %v", endpoint, err)
+					logger.Debug("→ Error checking %s: %v", endpoint, err)
 					return
 				}
 
@@ -290,13 +293,13 @@ func IsGraphQLEndpointWithContext(ctx context.Context, url string) (bool, error)
 		// rather than a hard error
 		if strings.Contains(err.Error(), "HTML response") ||
 			strings.Contains(err.Error(), "non-JSON response") {
-			logger.Debug("Endpoint %s is not a GraphQL endpoint: %v", url, err)
+			logger.Debug("→ Endpoint %s is not a GraphQL endpoint: %v", url, err)
 			return false, nil
 		}
 		// Context cancellation and timeouts are normal during parallel endpoint detection
 		if strings.Contains(err.Error(), "canceled") ||
 			strings.Contains(err.Error(), "timed out") {
-			logger.Debug("Check for endpoint %s was interrupted: %v", url, err)
+			logger.Debug("→ Check for endpoint %s was interrupted: %v", url, err)
 			return false, nil
 		}
 		return false, err

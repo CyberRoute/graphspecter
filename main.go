@@ -10,6 +10,7 @@ import (
 
 	"github.com/CyberRoute/graphspecter/pkg/cli"
 	"github.com/CyberRoute/graphspecter/pkg/cmd"
+	"github.com/CyberRoute/graphspecter/pkg/config"
 	"github.com/CyberRoute/graphspecter/pkg/logger"
 	"github.com/CyberRoute/graphspecter/pkg/network"
 	"github.com/CyberRoute/graphspecter/pkg/subscription"
@@ -20,6 +21,13 @@ func main() {
 	// Parse all command-line flags.
 	cfg := cmd.ParseFlags()
 
+	if cfg.ConfigFile != "" {
+		fileCfg, err := config.LoadConfigFile(cfg.ConfigFile)
+		if err != nil {
+			logger.Fatal("Error loading config file: %v", err)
+		}
+		config.ApplyFileConfigToCLIConfig(fileCfg, cfg)
+	}
 	// If subscribe flag is set, wait for user input before subscribing.
 	if cfg.Subscribe {
 		var query string
@@ -64,7 +72,7 @@ func main() {
 
 	cli.DisplayLogo()
 	logger.Info("GraphSpecter v1.0.0 starting...")
-	logger.Debug("Timeout set to %s", cfg.Timeout)
+	logger.Debug("→ Timeout set to %s", cfg.Timeout)
 
 	// Create a context with the user-specified timeout.
 	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), cfg.Timeout)
@@ -97,10 +105,15 @@ func main() {
 
 	// Common headers for all requests.
 	headers := map[string]string{"Content-Type": "application/json"}
-
+	if cfg.Headers != nil {
+		for k, v := range cfg.Headers {
+			headers[k] = v
+		}
+	}
+	logger.Debug("→ Using headers: %+v", headers)
 	// Add Authorization header if AUTH_TOKEN environment variable is set.
 	if authToken := os.Getenv("AUTH_TOKEN"); authToken != "" {
-		logger.Debug("Using authentication token from environment")
+		logger.Debug("→ Using authentication token from environment")
 		headers["Authorization"] = "Bearer " + authToken
 	}
 

@@ -4,6 +4,7 @@ import "time"
 
 // CLI types
 type CLIConfig struct {
+	ConfigFile    string
 	BaseURL       string
 	Detect        bool
 	OutputFile    string
@@ -26,6 +27,21 @@ type CLIConfig struct {
 	QueryFile     string
 	Variables     string
 	VariablesFile string
+	Headers       map[string]string
+}
+
+type FileConfig struct {
+	BaseURL    string            `yaml:"base" json:"base"`
+	Detect     bool              `yaml:"detect" json:"detect"`
+	TimeoutRaw string            `yaml:"timeout" json:"timeout"`
+	Timeout    time.Duration     `yaml:"-" json:"-"`
+	LogLevel   string            `yaml:"log-level" json:"log-level"`
+	LogFile    string            `yaml:"log-file" json:"log-file"`
+	Headers    map[string]string `yaml:"headers" json:"headers"`
+	NoColor    bool              `yaml:"no-color" json:"no-color"`
+	SchemaFile string            `yaml:"schema-file" json:"schema-file"`
+	OutputFile string            `yaml:"output" json:"output"`
+	MaxDepth   int               `yaml:"max-depth" json:"max-depth"`
 }
 
 // GraphQLRequest represents a GraphQL request structure.

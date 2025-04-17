@@ -1,0 +1,8 @@
+base: "http://192.168.86.151:5013/"
+timeout: 3s
+detect: true
+log-level: "debug"
+no-color: false
+output: "report.json"
+headers:
+  Authorization: "Bearer xyz123"
