@@ -65,9 +65,11 @@ func SetOutput(w io.Writer) {
 	output = w
 }
 
-// SetupLogging configures the logger based on command line flags.
-func SetupLogging(level string, logFilePath string, useColors bool) {
-	// Set log level based on string value.
+// SetupLogging configures logging from CLI flags.
+// level: "debug", "info", "warn", "error", "fatal" (only that level appears)
+// logFilePath: path for file output (append)
+// enableColors: whether to colorize terminal output
+func SetupLogging(level string, logFilePath string, enableColors bool) {
 	switch level {
 	case "debug":
 		SetLevel(LevelDebug)
@@ -77,20 +79,20 @@ func SetupLogging(level string, logFilePath string, useColors bool) {
 		SetLevel(LevelWarn)
 	case "error":
 		SetLevel(LevelError)
+	case "fatal":
+		SetLevel(LevelFatal)
 	default:
 		SetLevel(LevelInfo)
 	}
 
-	// Set up log file if specified.
 	if logFilePath != "" {
 		if err := SetLogFile(logFilePath); err != nil {
 			fmt.Printf("Error setting up log file: %v\n", err)
 			os.Exit(1)
 		}
 	}
-
 	// Enable or disable color output.
-	EnableColors(useColors)
+	EnableColors(enableColors)
 }
 
 // SetLogFile sets up logging to a file in addition to stdout
@@ -118,40 +120,33 @@ func CloseLogFile() {
 	}
 }
 
-// EnableColors enables or disables colored output
+// EnableColors toggles colored output
 func EnableColors(enable bool) {
 	useColors = enable
 }
 
-// log formats and writes a log message
+// log formats and writes a log message at the given level.
+// Only messages exactly matching currentLevel are emitted.
 func log(level LogLevel, format string, args ...interface{}) {
-	if level < currentLevel {
+	// Suppress any log that does not match the current log level.
+	if level != currentLevel {
 		return
 	}
 
-	// Get the current time
 	now := time.Now().Format("2006-01-02 15:04:05.000")
-
-	// Format the message
 	msg := fmt.Sprintf(format, args...)
-
-	// Build the log entry
 	levelStr := logLevelStrings[level]
-	var logEntry string
+	var entry string
 
 	if useColors && output == os.Stdout {
-		// Add color if we're logging to terminal
 		color := logLevelColors[level]
-		logEntry = fmt.Sprintf("%s [%s%s%s] %s\n", now, color, levelStr, colorReset, msg)
+		entry = fmt.Sprintf("%s [%s%s%s] %s\n", now, color, levelStr, colorReset, msg)
 	} else {
-		// No color for file output
-		logEntry = fmt.Sprintf("%s [%s] %s\n", now, levelStr, msg)
+		entry = fmt.Sprintf("%s [%s] %s\n", now, levelStr, msg)
 	}
 
-	// Write to output
-	fmt.Fprint(output, logEntry)
+	fmt.Fprint(output, entry)
 
-	// If this is a fatal log, exit the program
 	if level == LevelFatal {
 		if logFile != nil {
 			logFile.Close()

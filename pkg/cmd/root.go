@@ -11,7 +11,7 @@ func ParseFlags() *types.CLIConfig {
 
 	flag.StringVar(&cfg.BaseURL, "base", "", "Base URL of the target (e.g. http://192.168.1.1:5013)")
 	flag.BoolVar(&cfg.Detect, "detect", false, "Enable detection mode to find a GraphQL endpoint")
-	flag.StringVar(&cfg.OutputFile, "output", "introspection_<endpoint>.json", "Dump introspection schema")
+	flag.StringVar(&cfg.OutputFile, "output", "introspection.json", "Dump introspection schema")
 	flag.DurationVar(&cfg.Timeout, "timeout", 1*time.Second, "Timeout for operations (e.g., 30s, 1m)")
 	flag.StringVar(&cfg.LogLevel, "log-level", "", "Log level (debug, info, warn, error)")
 	flag.StringVar(&cfg.LogFile, "log-file", "", "Log to file in addition to stdout")
