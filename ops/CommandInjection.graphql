@@ -1,0 +1,3 @@
+query SystemDebug($arg: String!) {
+  systemDebug(arg: $arg)
+}

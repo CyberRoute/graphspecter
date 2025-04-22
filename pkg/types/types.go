@@ -23,6 +23,7 @@ type CLIConfig struct {
 	SubQuery      string
 	WSURL         string
 	Execute       bool
+	BatchDir      string
 	QueryString   string
 	QueryFile     string
 	Variables     string

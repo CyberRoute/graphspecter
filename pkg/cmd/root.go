@@ -30,6 +30,7 @@ func ParseFlags() *types.CLIConfig {
 
 	// Placeholder for future use
 	flag.BoolVar(&cfg.Execute, "execute", false, "Execute a query or mutation (future feature)")
+	flag.StringVar(&cfg.BatchDir, "batch-dir", "", "Directory of .graphql/.json pairs to execute in bulk")
 	flag.StringVar(&cfg.QueryString, "query-string", "", "GraphQL query string to execute")
 	flag.StringVar(&cfg.QueryFile, "query-file", "", "Path to file containing GraphQL query")
 	flag.StringVar(&cfg.Variables, "vars", "", "Query variables as JSON string")

@@ -3,9 +3,12 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/CyberRoute/graphspecter/pkg/cli"
@@ -17,7 +20,6 @@ import (
 )
 
 func main() {
-
 	// Parse all command-line flags.
 	cfg := cmd.ParseFlags()
 
@@ -28,6 +30,136 @@ func main() {
 		}
 		config.ApplyFileConfigToCLIConfig(fileCfg, cfg)
 	}
+	// Batch execution mode: execute all .graphql files in a directory with vars
+	if cfg.BatchDir != "" {
+		if cfg.BaseURL == "" {
+			logger.Fatal("--base is required for batch execution")
+		}
+		logger.Info("Batch mode: scanning directory %s", cfg.BatchDir)
+		files, err := filepath.Glob(filepath.Join(cfg.BatchDir, "*.graphql"))
+		if err != nil {
+			logger.Fatal("Error scanning batch directory: %v", err)
+		}
+		// regex to find operation definitions
+		opRegex := regexp.MustCompile(`(?m)^(?:query|mutation)\s+([A-Za-z0-9_]+)`)
+		for _, qf := range files {
+			contentBytes, err := os.ReadFile(qf)
+			if err != nil {
+				logger.Error("Skipping %s: %v", qf, err)
+				continue
+			}
+			content := string(contentBytes)
+			locs := opRegex.FindAllStringSubmatchIndex(content, -1)
+			if len(locs) == 0 {
+				logger.Error("No operations found in %s", qf)
+				continue
+			}
+
+			// load variables file if present
+			varsFile := strings.TrimSuffix(qf, ".graphql") + ".json"
+			var vars map[string]interface{}
+			if data, err := os.ReadFile(varsFile); err == nil {
+				json.Unmarshal(data, &vars)
+			}
+
+			// prepare headers
+			headers := map[string]string{"Content-Type": "application/json"}
+			if auth := os.Getenv("AUTH_TOKEN"); auth != "" {
+				headers["Authorization"] = "Bearer " + auth
+			}
+
+			// execute each operation separately
+			for i, loc := range locs {
+				start := loc[0]
+				end := len(content)
+				if i+1 < len(locs) {
+					end = locs[i+1][0]
+				}
+				opDoc := content[start:end]
+				// extract operation name
+				hdr := opRegex.FindStringSubmatch(opDoc)
+				opName := hdr[1]
+
+				res, err := network.SendGraphQLRequestWithContext(context.Background(), cfg.BaseURL, opDoc, vars, headers)
+				if err != nil {
+					logger.Error("%s (in %s) failed: %v", opName, filepath.Base(qf), err)
+					continue
+				}
+				out, _ := json.MarshalIndent(res, "", "  ")
+				fmt.Printf("Result for %s (from %s):\n%s\n", opName, filepath.Base(qf), string(out))
+			}
+		}
+		os.Exit(0)
+	}
+
+	// If execute flag is set, run provided query or mutation
+	if cfg.Execute {
+		if cfg.BaseURL == "" {
+			logger.Fatal("--base is required when using --execute")
+		}
+		// Load query
+		var query string
+		if cfg.QueryString != "" {
+			query = cfg.QueryString
+		} else if cfg.QueryFile != "" {
+			data, err := os.ReadFile(cfg.QueryFile)
+			if err != nil {
+				logger.Fatal("Error reading query file: %v", err)
+			}
+			query = string(data)
+		} else {
+			logger.Fatal("No query provided: use --query-string or --query-file")
+		}
+
+		// Parse variables
+		var variables map[string]interface{}
+		if cfg.Variables != "" {
+			if err := json.Unmarshal([]byte(cfg.Variables), &variables); err != nil {
+				logger.Fatal("Error parsing variables JSON: %v", err)
+			}
+		} else if cfg.VariablesFile != "" {
+			data, err := os.ReadFile(cfg.VariablesFile)
+			if err != nil {
+				logger.Fatal("Error reading variables file: %v", err)
+			}
+			if err := json.Unmarshal(data, &variables); err != nil {
+				logger.Fatal("Error parsing variables file JSON: %v", err)
+			}
+		}
+
+		// Configure logging before request
+		logger.SetupLogging(cfg.LogLevel, cfg.LogFile, !cfg.NoColor)
+
+		// Prepare context
+		timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), cfg.Timeout)
+		defer timeoutCancel()
+
+		// Prepare headers
+		headers := map[string]string{"Content-Type": "application/json"}
+		if cfg.Headers != nil {
+			for k, v := range cfg.Headers {
+				headers[k] = v
+			}
+		}
+		if authToken := os.Getenv("AUTH_TOKEN"); authToken != "" {
+			headers["Authorization"] = "Bearer " + authToken
+		}
+
+		// Execute request
+		resp, err := network.SendGraphQLRequestWithContext(timeoutCtx, cfg.BaseURL, query, variables, headers)
+		if err != nil {
+			logger.Fatal("Execution error: %v", err)
+		}
+
+		// Pretty-print the JSON response
+		output, err := json.MarshalIndent(resp, "", "  ")
+		if err != nil {
+			logger.Fatal("Error formatting response: %v", err)
+		}
+		fmt.Println(string(output))
+		os.Exit(0)
+	}
+
 	// If subscribe flag is set, wait for user input before subscribing.
 	if cfg.Subscribe {
 		var query string

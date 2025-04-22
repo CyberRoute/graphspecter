@@ -1,0 +1,12 @@
+query Pastes($filter: String!) {
+  pastes(filter: $filter) {
+    id
+    title
+    content
+    public
+    userAgent
+    ipAddr
+    ownerId
+    burn
+  }
+}
