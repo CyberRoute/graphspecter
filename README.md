@@ -9,6 +9,7 @@
 - Check if GraphQL introspection is enabled
 - Export introspection data to JSON file
 - Exports queries and mutations ready to test
+- Executes queries and mutations in bulk or stand-alone
 
 ## Project Structure
 
