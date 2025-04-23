@@ -1,0 +1,14 @@
+mutation StoredXSS(
+  $title:  String!,
+  $content:String!,
+  $public: Boolean!
+) {
+  createPaste(
+    title:  $title,
+    content:$content,
+    public: $public
+  ) {
+    paste { id }
+  }
+}
+
