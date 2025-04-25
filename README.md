@@ -127,4 +127,4 @@ export AUTH_TOKEN="your-token-here"
 
 - GraphQL introspection is a feature that allows clients to query a GraphQL server for information about its schema.
 - While useful for development, introspection should typically be disabled in production environments as it may expose sensitive information about your API structure.
-- The injections tests in `./ops` are run against https://github.com/dolevf/Damn-Vulnerable-GraphQL-Application
+- The injections tests in `./ops` are run against https://github.com/dolevf/Damn-Vulnerable-GraphQL-Application, adding also #hackthebox attacks samples from https://academy.hackthebox.com/course/preview/attacking-graphql 
