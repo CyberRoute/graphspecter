@@ -308,7 +308,9 @@ func IsGraphQLEndpointWithContext(ctx context.Context, url string) (bool, error)
 	// Check for __typename in data or a non-empty errors array.
 	if data, ok := result["data"].(map[string]interface{}); ok {
 		if typename, exists := data["__typename"].(string); exists {
-			if typename == "Query" || typename == "QueryRoot" || typename == "query_root" {
+			// Accept various query type names (case-insensitive check for common variations)
+			lowerTypename := strings.ToLower(typename)
+			if lowerTypename == "query" || lowerTypename == "queryroot" || lowerTypename == "query_root" {
 				return true, nil
 			}
 		}
